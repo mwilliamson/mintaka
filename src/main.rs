@@ -1,4 +1,7 @@
-use std::{io::{Read, Write}, sync::Arc, time::Duration};
+use std::{io::Read, sync::Arc};
+
+use termwiz::terminal::Terminal;
+use wezterm_term::CellAttributes;
 
 fn main() {
     let pty_system = portable_pty::native_pty_system();
@@ -11,6 +14,7 @@ fn main() {
     }).unwrap();
 
     let mut command = portable_pty::CommandBuilder::new("ls");
+    command.arg("-lh");
     command.cwd(std::env::current_dir().unwrap());
     let mut child_process = pty_pair.slave.spawn_command(command).unwrap();
     std::mem::drop(pty_pair.slave);
@@ -49,12 +53,12 @@ fn main() {
     }
 
     let lines = terminal.screen_mut().lines_in_phys_range(0..100);
-    let mut stdout = std::io::stdout().lock();
+    let real_terminal_capabilities = termwiz::caps::Capabilities::new_from_env().unwrap();
+    let mut real_terminal = termwiz::terminal::new_terminal(real_terminal_capabilities).unwrap();
     for line in lines {
-        for cell in line.visible_cells() {
-            stdout.write_all(cell.as_cell().str().as_bytes()).unwrap();
-        }
-        stdout.write_all(&[0x0a, 0x0d]).unwrap();
+        let changes = line.changes(&CellAttributes::blank());
+        real_terminal.render(&changes).unwrap();
+        real_terminal.render(&[termwiz::surface::Change::Text("\r\n".to_owned())]).unwrap();
     }
 }
 
