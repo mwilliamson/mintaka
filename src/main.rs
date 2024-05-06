@@ -1,5 +1,7 @@
-use termwiz::{input::InputEvent, surface::{Change, CursorVisibility}, terminal::Terminal, widgets::WidgetEvent};
-use wezterm_term::CellAttributes;
+use std::sync::{Arc, Mutex};
+
+use termwiz::{input::{InputEvent, KeyEvent}, surface::{Change, CursorVisibility}, terminal::Terminal, widgets::WidgetEvent};
+use wezterm_term::{CellAttributes, KeyCode};
 
 use crate::processes::Processes;
 
@@ -14,6 +16,7 @@ fn main() {
     for process_config in config.processes {
         processes.start_process(process_config).unwrap();
     }
+    let processes = Arc::new(Mutex::new(processes));
 
     let terminal_capabilities = termwiz::caps::Capabilities::new_from_env().unwrap();
     let mut terminal = termwiz::terminal::new_terminal(terminal_capabilities).unwrap();
@@ -24,10 +27,10 @@ fn main() {
     let mut ui = termwiz::widgets::Ui::new();
     let ui_root_id = ui.set_root(MainScreen);
     let process_list_pane_id = ui.add_child(ui_root_id, ProcessListPane {
-        processes: &processes,
+        processes: Arc::clone(&processes),
     });
     ui.add_child(ui_root_id, ProcessPane {
-        processes: &processes
+        processes,
     });
     ui.set_focus(process_list_pane_id);
 
@@ -47,12 +50,13 @@ fn main() {
                 buffered_terminal.resize(cols, rows);
             }
             Some(input) => {
+                if let InputEvent::Key(KeyEvent { key: KeyCode::Char('q'), .. }) = input {
+                    return;
+                }
                 ui.queue_event(WidgetEvent::Input(input));
             },
             None => {}
         }
-
-        break;
     }
 }
 
@@ -69,15 +73,16 @@ impl termwiz::widgets::Widget for MainScreen {
     }
 }
 
-struct ProcessListPane<'a> {
-    processes: &'a Processes,
+struct ProcessListPane {
+    processes: Arc<Mutex<Processes>>,
 }
 
-impl termwiz::widgets::Widget for ProcessListPane<'_> {
+impl termwiz::widgets::Widget for ProcessListPane {
     fn render(&mut self, args: &mut termwiz::widgets::RenderArgs) {
         args.cursor.visibility = CursorVisibility::Hidden;
         args.surface.add_change(Change::ClearScreen(Default::default()));
-        for (process_index, process) in self.processes.processes().into_iter().enumerate() {
+        let processes = self.processes.lock().unwrap();
+        for (process_index, process) in processes.processes().into_iter().enumerate() {
             args.surface.add_change(Change::Text(format!("{}. ", process_index + 1)));
             args.surface.add_change(Change::Text(process.name.clone()));
             args.surface.add_change(Change::Text("\r\n".to_owned()));
@@ -90,16 +95,38 @@ impl termwiz::widgets::Widget for ProcessListPane<'_> {
         c.set_pct_width(20);
         c
     }
+
+    fn process_event(&mut self, event: &WidgetEvent, _args: &mut termwiz::widgets::UpdateArgs) -> bool {
+        match event {
+            WidgetEvent::Input(InputEvent::Key(key_event)) => {
+                match key_event.key {
+                    wezterm_term::KeyCode::UpArrow => {
+                        let mut processes = self.processes.lock().unwrap();
+                        processes.move_focus_up();
+                        true
+                    },
+                    wezterm_term::KeyCode::DownArrow => {
+                        let mut processes = self.processes.lock().unwrap();
+                        processes.move_focus_down();
+                        true
+                    },
+                    _ => false,
+                }
+            },
+            _ => false,
+        }
+    }
 }
 
-struct ProcessPane<'a> {
-    processes: &'a Processes,
+struct ProcessPane {
+    processes: Arc<Mutex<Processes>>,
 }
 
-impl termwiz::widgets::Widget for ProcessPane<'_> {
+impl termwiz::widgets::Widget for ProcessPane {
     fn render(&mut self, args: &mut termwiz::widgets::RenderArgs) {
         let lines = {
-            self.processes.lines()
+            let processes = self.processes.lock().unwrap();
+            processes.lines()
         };
 
         args.surface.add_change(Change::ClearScreen(Default::default()));

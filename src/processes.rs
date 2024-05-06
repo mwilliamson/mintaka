@@ -10,6 +10,8 @@ pub(crate) struct Processes {
     pty_size: portable_pty::PtySize,
 
     processes: Vec<Process>,
+
+    pub(crate) focused_process_index: usize,
 }
 
 impl Processes {
@@ -22,7 +24,7 @@ impl Processes {
             pixel_height: 0,
         };
 
-        Self { pty_system, pty_size, processes: Vec::new() }
+        Self { pty_system, pty_size, processes: Vec::new(), focused_process_index: 0 }
     }
 
     pub(crate) fn start_process(
@@ -99,8 +101,20 @@ impl Processes {
     }
 
     pub(crate) fn lines(&self) -> Vec<wezterm_term::Line> {
-        let terminal = self.processes[0].terminal.lock().unwrap();
+        let terminal = self.processes[self.focused_process_index].terminal.lock().unwrap();
         terminal.screen().lines_in_phys_range(0..100)
+    }
+
+    pub(crate) fn move_focus_up(&mut self) {
+        if self.focused_process_index > 0 {
+            self.focused_process_index -= 1;
+        }
+    }
+
+    pub(crate) fn move_focus_down(&mut self) {
+        if self.focused_process_index + 1 < self.processes.len() {
+            self.focused_process_index += 1;
+        }
     }
 }
 
