@@ -108,12 +108,16 @@ impl Processes {
     pub(crate) fn move_focus_up(&mut self) {
         if self.focused_process_index > 0 {
             self.focused_process_index -= 1;
+        } else {
+            self.focused_process_index = self.processes.len() - 1;
         }
     }
 
     pub(crate) fn move_focus_down(&mut self) {
         if self.focused_process_index + 1 < self.processes.len() {
             self.focused_process_index += 1;
+        } else {
+            self.focused_process_index = 0;
         }
     }
 }
