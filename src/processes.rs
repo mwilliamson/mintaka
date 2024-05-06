@@ -45,7 +45,7 @@ impl Processes {
         Self::spawn_process_reader(child_process_reader, Arc::clone(&terminal));
 
         let process = Process {
-            name: process_config.command.join(" "),
+            name: process_config.name.unwrap_or_else(|| process_config.command.join(" ")),
             _child_process: child_process,
             terminal,
             _pty_master: pty_pair.master,

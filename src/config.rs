@@ -10,6 +10,8 @@ pub(crate) struct MintakaConfig {
 #[derive(Deserialize)]
 pub(crate) struct ProcessConfig {
     pub(crate) command: Vec<String>,
+
+    pub(crate) name: Option<String>,
 }
 
 #[allow(dead_code)]

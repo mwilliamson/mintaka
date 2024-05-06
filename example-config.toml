@@ -3,3 +3,7 @@ command = ["ls", "-lh", "--color=auto"]
 
 [[processes]]
 command = ["echo", "one", "two", "three"]
+
+[[processes]]
+name = "Print and sleep"
+command  = ["bash", "-c", "while :; do date; sleep 1; done"]
