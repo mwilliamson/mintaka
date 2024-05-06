@@ -145,19 +145,25 @@ struct ProcessPane {
 impl termwiz::widgets::Widget for ProcessPane {
     fn render(&mut self, args: &mut termwiz::widgets::RenderArgs) {
         let lines = {
-            let processes = self.processes.lock().unwrap();
+            let mut processes = self.processes.lock().unwrap();
+            // TODO: Wait for size before starting processes
+            processes.resize(args.surface.dimensions());
             processes.lines()
         };
 
         args.surface.add_change(Change::ClearScreen(Default::default()));
 
-        for line in lines {
+        for (line_index, line) in lines.iter().enumerate() {
+            if line_index != 0 {
+                args.surface.add_change(
+                    termwiz::surface::Change::Text("\r\n".to_owned()),
+                );
+            }
             let changes = line.changes(&CellAttributes::blank());
             args.surface.add_changes(changes);
-            args.surface.add_changes(vec![
-                termwiz::surface::Change::Text("\r\n".to_owned()),
+            args.surface.add_change(
                 termwiz::surface::Change::AllAttributes(CellAttributes::blank()),
-            ]);
+            );
         }
     }
 

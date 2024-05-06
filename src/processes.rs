@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use portable_pty::PtySystem;
+use wezterm_term::TerminalSize;
 
 use crate::config::ProcessConfig;
 
@@ -48,7 +49,7 @@ impl Processes {
             name: process_config.name.unwrap_or_else(|| process_config.command.join(" ")),
             _child_process: child_process,
             terminal,
-            _pty_master: pty_pair.master,
+            pty_master: pty_pair.master,
         };
         self.processes.push(process);
 
@@ -120,13 +121,30 @@ impl Processes {
             self.focused_process_index = 0;
         }
     }
+
+    pub(crate) fn resize(&mut self, size: (usize, usize)) {
+        self.pty_size.cols = size.0 as u16;
+        self.pty_size.rows = size.1 as u16;
+        for process in &self.processes {
+            process.pty_master.resize(self.pty_size).unwrap();
+            let mut terminal = process.terminal.lock().unwrap();
+            let dpi = terminal.get_size().dpi;
+            terminal.resize(TerminalSize {
+                rows: self.pty_size.rows as usize,
+                cols: self.pty_size.cols as usize,
+                pixel_width: self.pty_size.pixel_width as usize,
+                pixel_height: self.pty_size.pixel_height as usize,
+                dpi,
+            });
+        }
+    }
 }
 
 pub(crate) struct Process {
     pub(crate) name: String,
     _child_process: Box<dyn portable_pty::Child>,
     terminal: Arc<Mutex<wezterm_term::Terminal>>,
-    _pty_master: Box<dyn portable_pty::MasterPty>,
+    pty_master: Box<dyn portable_pty::MasterPty>,
 }
 
 #[allow(dead_code)]
