@@ -15,7 +15,7 @@ fn main() {
 
     let mut command = portable_pty::CommandBuilder::new("ls");
     command.arg("-lh");
-    command.arg("--color");
+    command.arg("--color=auto");
     command.cwd(std::env::current_dir().unwrap());
     let mut child_process = pty_pair.slave.spawn_command(command).unwrap();
     std::mem::drop(pty_pair.slave);
