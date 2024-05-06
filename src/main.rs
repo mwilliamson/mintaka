@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use processes::Process;
-use termwiz::{color::AnsiColor, input::{InputEvent, KeyEvent}, surface::{Change, CursorVisibility}, terminal::{buffered::BufferedTerminal, Terminal}, widgets::WidgetEvent};
+use termwiz::{caps::ProbeHints, color::AnsiColor, input::{InputEvent, KeyEvent}, surface::{Change, CursorVisibility}, terminal::{buffered::BufferedTerminal, Terminal}, widgets::WidgetEvent};
 use wezterm_term::{AttributeChange, CellAttributes, KeyCode, KeyModifiers};
 
 use crate::processes::Processes;
@@ -13,7 +13,7 @@ mod processes;
 fn main() {
     let config = cli::load_config().unwrap();
 
-    let terminal_capabilities = termwiz::caps::Capabilities::new_from_env().unwrap();
+    let terminal_capabilities = termwiz::caps::Capabilities::new_with_hints(ProbeHints::new_from_env().mouse_reporting(Some(false))).unwrap();
     let mut terminal = termwiz::terminal::new_terminal(terminal_capabilities).unwrap();
     terminal.set_raw_mode().unwrap();
     terminal.enter_alternate_screen().unwrap();
