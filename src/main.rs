@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
-use termwiz::{input::{InputEvent, KeyEvent}, surface::{Change, CursorVisibility}, terminal::Terminal, widgets::WidgetEvent};
-use wezterm_term::{CellAttributes, KeyCode};
+use termwiz::{color::{AnsiColor, ColorAttribute}, input::{InputEvent, KeyEvent}, surface::{Change, CursorVisibility}, terminal::Terminal, widgets::WidgetEvent};
+use wezterm_term::{AttributeChange, CellAttributes, KeyCode};
 
 use crate::processes::Processes;
 
@@ -83,6 +83,23 @@ impl termwiz::widgets::Widget for ProcessListPane {
         args.surface.add_change(Change::ClearScreen(Default::default()));
         let processes = self.processes.lock().unwrap();
         for (process_index, process) in processes.processes().into_iter().enumerate() {
+            let is_focused = processes.focused_process_index == process_index;
+            if is_focused {
+                args.surface.add_change(Change::Attribute(
+                    AttributeChange::Background(ColorAttribute::from(AnsiColor::Black))
+                ));
+                args.surface.add_change(Change::Attribute(
+                    AttributeChange::Foreground(ColorAttribute::from(AnsiColor::White))
+                ));
+            } else {
+                args.surface.add_change(Change::Attribute(
+                    AttributeChange::Background(ColorAttribute::from(AnsiColor::White))
+                ));
+                args.surface.add_change(Change::Attribute(
+                    AttributeChange::Foreground(ColorAttribute::from(AnsiColor::Black))
+                ));
+            }
+
             args.surface.add_change(Change::Text(format!("{}. ", process_index + 1)));
             args.surface.add_change(Change::Text(process.name.clone()));
             args.surface.add_change(Change::Text("\r\n".to_owned()));
