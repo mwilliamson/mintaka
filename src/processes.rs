@@ -29,7 +29,7 @@ impl Processes {
         &mut self,
         process_config: ProcessConfig,
     ) -> Result<(), ProcessError> {
-        let pty_command = Self::process_config_to_pty_command(process_config)?;
+        let pty_command = Self::process_config_to_pty_command(&process_config)?;
 
         let pty_pair = self.pty_system.openpty(self.pty_size).unwrap();
 
@@ -43,6 +43,7 @@ impl Processes {
         Self::spawn_process_reader(child_process_reader, Arc::clone(&terminal));
 
         let process = Process {
+            name: process_config.command.join(" "),
             _child_process: child_process,
             terminal,
             _pty_master: pty_pair.master,
@@ -52,7 +53,7 @@ impl Processes {
         Ok(())
     }
 
-    fn process_config_to_pty_command(process_config: ProcessConfig) -> Result<portable_pty::CommandBuilder, ProcessError> {
+    fn process_config_to_pty_command(process_config: &ProcessConfig) -> Result<portable_pty::CommandBuilder, ProcessError> {
         let executable = process_config.command.first()
             .ok_or(ProcessError::ProcessConfigMissingCommand)?;
         let mut pty_command = portable_pty::CommandBuilder::new(executable);
@@ -93,13 +94,18 @@ impl Processes {
         });
     }
 
+    pub(crate) fn processes(&self) -> &[Process] {
+        &self.processes
+    }
+
     pub(crate) fn lines(&self) -> Vec<wezterm_term::Line> {
         let terminal = self.processes[0].terminal.lock().unwrap();
         terminal.screen().lines_in_phys_range(0..100)
     }
 }
 
-struct Process {
+pub(crate) struct Process {
+    pub(crate) name: String,
     _child_process: Box<dyn portable_pty::Child>,
     terminal: Arc<Mutex<wezterm_term::Terminal>>,
     _pty_master: Box<dyn portable_pty::MasterPty>,

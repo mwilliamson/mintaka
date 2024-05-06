@@ -1,6 +1,6 @@
-use std::{sync::{Arc, Mutex}, time::Duration};
+use std::time::Duration;
 
-use termwiz::{input::{InputEvent, KeyEvent}, surface::Change, terminal::{buffered::BufferedTerminal, Terminal}, widgets::WidgetEvent};
+use termwiz::{input::InputEvent, surface::Change, terminal::Terminal, widgets::WidgetEvent};
 use wezterm_term::CellAttributes;
 
 use crate::processes::Processes;
@@ -17,8 +17,6 @@ fn main() {
         processes.start_process(process_config).unwrap();
     }
 
-    let processes = Arc::new(Mutex::new(processes));
-
     std::thread::sleep(Duration::from_secs(1));
 
     let terminal_capabilities = termwiz::caps::Capabilities::new_from_env().unwrap();
@@ -29,8 +27,11 @@ fn main() {
 
     let mut ui = termwiz::widgets::Ui::new();
     let ui_root_id = ui.set_root(MainScreen);
+    ui.add_child(ui_root_id, ProcessListPane {
+        processes: &processes,
+    });
     ui.add_child(ui_root_id, ProcessPane {
-        processes
+        processes: &processes
     });
 
     loop {
@@ -71,15 +72,35 @@ impl termwiz::widgets::Widget for MainScreen {
     }
 }
 
-struct ProcessPane {
-    processes: Arc<Mutex<Processes>>,
+struct ProcessListPane<'a> {
+    processes: &'a Processes,
 }
 
-impl termwiz::widgets::Widget for ProcessPane {
+impl termwiz::widgets::Widget for ProcessListPane<'_> {
+    fn render(&mut self, args: &mut termwiz::widgets::RenderArgs) {
+        args.surface.add_change(Change::ClearScreen(Default::default()));
+        for process in self.processes.processes() {
+            args.surface.add_change(Change::Text(process.name.clone()));
+            args.surface.add_change(Change::Text("\r\n".to_owned()));
+        }
+    }
+
+    fn get_size_constraints(&self) -> termwiz::widgets::layout::Constraints {
+        let mut c = termwiz::widgets::layout::Constraints::default();
+        c.set_halign(termwiz::widgets::layout::HorizontalAlignment::Left);
+        c.set_pct_width(20);
+        c
+    }
+}
+
+struct ProcessPane<'a> {
+    processes: &'a Processes,
+}
+
+impl termwiz::widgets::Widget for ProcessPane<'_> {
     fn render(&mut self, args: &mut termwiz::widgets::RenderArgs) {
         let lines = {
-            let processes = self.processes.lock().unwrap();
-            processes.lines()
+            self.processes.lines()
         };
 
         args.surface.add_change(Change::ClearScreen(Default::default()));
@@ -92,5 +113,12 @@ impl termwiz::widgets::Widget for ProcessPane {
                 termwiz::surface::Change::AllAttributes(CellAttributes::blank()),
             ]);
         }
+    }
+
+    fn get_size_constraints(&self) -> termwiz::widgets::layout::Constraints {
+        let mut c = termwiz::widgets::layout::Constraints::default();
+        c.set_halign(termwiz::widgets::layout::HorizontalAlignment::Right);
+        c.set_pct_width(80);
+        c
     }
 }
