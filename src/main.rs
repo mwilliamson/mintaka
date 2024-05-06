@@ -15,6 +15,7 @@ fn main() {
 
     let mut command = portable_pty::CommandBuilder::new("ls");
     command.arg("-lh");
+    command.arg("--color");
     command.cwd(std::env::current_dir().unwrap());
     let mut child_process = pty_pair.slave.spawn_command(command).unwrap();
     std::mem::drop(pty_pair.slave);
@@ -58,7 +59,10 @@ fn main() {
     for line in lines {
         let changes = line.changes(&CellAttributes::blank());
         real_terminal.render(&changes).unwrap();
-        real_terminal.render(&[termwiz::surface::Change::Text("\r\n".to_owned())]).unwrap();
+        real_terminal.render(&[
+            termwiz::surface::Change::Text("\r\n".to_owned()),
+            termwiz::surface::Change::AllAttributes(CellAttributes::blank()),
+        ]).unwrap();
     }
 }
 
