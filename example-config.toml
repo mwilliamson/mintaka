@@ -1,0 +1,5 @@
+[[processes]]
+command = ["ls", "-lh", "--color=auto"]
+
+[[processes]]
+command = ["echo", "one", "two", "three"]

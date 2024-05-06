@@ -3,7 +3,13 @@ use std::{io::Read, sync::Arc};
 use termwiz::terminal::Terminal;
 use wezterm_term::CellAttributes;
 
+mod cli;
+mod config;
+
 fn main() {
+    let config = cli::load_config().unwrap();
+    let command = &config.processes[0].command;
+
     let pty_system = portable_pty::native_pty_system();
 
     let pty_pair = pty_system.openpty(portable_pty::PtySize {
@@ -13,11 +19,10 @@ fn main() {
         pixel_height: 0,
     }).unwrap();
 
-    let mut command = portable_pty::CommandBuilder::new("ls");
-    command.arg("-lh");
-    command.arg("--color=auto");
-    command.cwd(std::env::current_dir().unwrap());
-    let mut child_process = pty_pair.slave.spawn_command(command).unwrap();
+    let mut pty_command = portable_pty::CommandBuilder::new(&command[0]);
+    pty_command.args(command.iter().skip(1));
+    pty_command.cwd(std::env::current_dir().unwrap());
+    let mut child_process = pty_pair.slave.spawn_command(pty_command).unwrap();
     std::mem::drop(pty_pair.slave);
 
     let child_process_writer = pty_pair.master.take_writer().unwrap();
