@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use termwiz::{color::AnsiColor, input::{InputEvent, KeyEvent}, surface::{Change, CursorVisibility}, terminal::Terminal, widgets::WidgetEvent};
+use termwiz::{color::AnsiColor, input::{InputEvent, KeyEvent}, surface::{Change, CursorVisibility}, terminal::{buffered::BufferedTerminal, Terminal}, widgets::WidgetEvent};
 use wezterm_term::{AttributeChange, CellAttributes, KeyCode, KeyModifiers};
 
 use crate::processes::Processes;
@@ -12,17 +12,18 @@ mod processes;
 fn main() {
     let config = cli::load_config().unwrap();
 
-    let mut processes = Processes::new();
-    for process_config in config.processes {
-        processes.start_process(process_config).unwrap();
-    }
-    let processes = Arc::new(Mutex::new(processes));
-
     let terminal_capabilities = termwiz::caps::Capabilities::new_from_env().unwrap();
     let mut terminal = termwiz::terminal::new_terminal(terminal_capabilities).unwrap();
     terminal.set_raw_mode().unwrap();
     terminal.enter_alternate_screen().unwrap();
-    let mut buffered_terminal = termwiz::terminal::buffered::BufferedTerminal::new(terminal).unwrap();
+    let terminal_waker = terminal.waker();
+    let mut buffered_terminal = BufferedTerminal::new(terminal).unwrap();
+
+    let mut processes = Processes::new(terminal_waker);
+    for process_config in config.processes {
+        processes.start_process(process_config).unwrap();
+    }
+    let processes = Arc::new(Mutex::new(processes));
 
     let mut ui = termwiz::widgets::Ui::new();
     let ui_root_id = ui.set_root(MainScreen);

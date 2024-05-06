@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use portable_pty::PtySystem;
+use termwiz::terminal::TerminalWaker;
 use wezterm_term::TerminalSize;
 
 use crate::config::ProcessConfig;
@@ -13,10 +14,12 @@ pub(crate) struct Processes {
     processes: Vec<Process>,
 
     pub(crate) focused_process_index: usize,
+
+    on_change: TerminalWaker,
 }
 
 impl Processes {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(on_change: TerminalWaker) -> Self {
         let pty_system = portable_pty::native_pty_system();
         let pty_size = portable_pty::PtySize {
             rows: 24,
@@ -25,7 +28,13 @@ impl Processes {
             pixel_height: 0,
         };
 
-        Self { pty_system, pty_size, processes: Vec::new(), focused_process_index: 0 }
+        Self {
+            pty_system,
+            pty_size,
+            processes: Vec::new(),
+            focused_process_index: 0,
+            on_change,
+        }
     }
 
     pub(crate) fn start_process(
@@ -43,7 +52,7 @@ impl Processes {
         let terminal = Arc::new(Mutex::new(Self::create_process_terminal(child_process_writer)));
 
         let child_process_reader = pty_pair.master.try_clone_reader().unwrap();
-        Self::spawn_process_reader(child_process_reader, Arc::clone(&terminal));
+        self.spawn_process_reader(child_process_reader, Arc::clone(&terminal));
 
         let process = Process {
             name: process_config.name.unwrap_or_else(|| process_config.command.join(" ")),
@@ -82,9 +91,11 @@ impl Processes {
     }
 
     fn spawn_process_reader(
+        &self,
         mut reader: Box<dyn std::io::Read + Send>,
         terminal: Arc<Mutex<wezterm_term::Terminal>>,
     ) {
+        let on_change = self.on_change.clone();
         std::thread::spawn(move || {
             let mut bytes = vec![0; 256];
             loop {
@@ -93,6 +104,7 @@ impl Processes {
                     break;
                 }
                 terminal.lock().unwrap().advance_bytes(&bytes[..bytes_read]);
+                on_change.wake().unwrap();
             }
         });
     }
