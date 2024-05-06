@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use termwiz::{input::InputEvent, surface::{Change, CursorVisibility}, terminal::Terminal, widgets::WidgetEvent};
 use wezterm_term::CellAttributes;
 
@@ -16,8 +14,6 @@ fn main() {
     for process_config in config.processes {
         processes.start_process(process_config).unwrap();
     }
-
-    std::thread::sleep(Duration::from_secs(1));
 
     let terminal_capabilities = termwiz::caps::Capabilities::new_from_env().unwrap();
     let mut terminal = termwiz::terminal::new_terminal(terminal_capabilities).unwrap();
