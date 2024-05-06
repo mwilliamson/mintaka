@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use termwiz::{color::AnsiColor, input::{InputEvent, KeyEvent}, surface::{Change, CursorVisibility}, terminal::Terminal, widgets::WidgetEvent};
-use wezterm_term::{AttributeChange, CellAttributes, KeyCode};
+use wezterm_term::{AttributeChange, CellAttributes, KeyCode, KeyModifiers};
 
 use crate::processes::Processes;
 
@@ -50,7 +50,10 @@ fn main() {
                 buffered_terminal.resize(cols, rows);
             }
             Some(input) => {
-                if let InputEvent::Key(KeyEvent { key: KeyCode::Char('q'), .. }) = input {
+                if let InputEvent::Key(
+                    KeyEvent { key: KeyCode::Char('q'), .. } |
+                    KeyEvent { key: KeyCode::Char('c'), modifiers: KeyModifiers::CTRL}
+                ) = input {
                     return;
                 }
                 ui.queue_event(WidgetEvent::Input(input));
