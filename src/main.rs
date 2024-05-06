@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 
+use processes::Process;
 use termwiz::{color::AnsiColor, input::{InputEvent, KeyEvent}, surface::{Change, CursorVisibility}, terminal::{buffered::BufferedTerminal, Terminal}, widgets::WidgetEvent};
 use wezterm_term::{AttributeChange, CellAttributes, KeyCode, KeyModifiers};
 
@@ -102,8 +103,8 @@ impl termwiz::widgets::Widget for ProcessListPane {
                 AttributeChange::Foreground(foreground_color.into())
             ));
 
-            args.surface.add_change(Change::Text(format!("{}. ", process_index + 1)));
-            args.surface.add_change(Change::Text(process.name.clone()));
+            let process_label = Self::process_label(process_index, &process);
+            args.surface.add_change(Change::Text(process_label));
 
             args.surface.add_change(Change::ClearToEndOfLine(background_color.into()));
             args.surface.add_change(Change::Text("\r\n".to_owned()));
@@ -111,9 +112,15 @@ impl termwiz::widgets::Widget for ProcessListPane {
     }
 
     fn get_size_constraints(&self) -> termwiz::widgets::layout::Constraints {
+        let processes = self.processes.lock().unwrap();
+        // TODO: .len() is not necessarily the number of cells
+        let max_label_len = processes.processes().iter()
+            .enumerate()
+            .map(|(process_index, process)| Self::process_label(process_index, process).len())
+            .max()
+            .unwrap_or(30);
         let mut c = termwiz::widgets::layout::Constraints::default();
-        c.set_halign(termwiz::widgets::layout::HorizontalAlignment::Left);
-        c.set_pct_width(20);
+        c.set_fixed_width(max_label_len as _);
         c
     }
 
@@ -136,6 +143,12 @@ impl termwiz::widgets::Widget for ProcessListPane {
             },
             _ => false,
         }
+    }
+}
+
+impl ProcessListPane {
+    fn process_label(process_index: usize, process: &Process) -> String {
+        format!("{}. {}", process_index + 1, process.name)
     }
 }
 
@@ -166,12 +179,5 @@ impl termwiz::widgets::Widget for ProcessPane {
                 termwiz::surface::Change::AllAttributes(CellAttributes::blank()),
             );
         }
-    }
-
-    fn get_size_constraints(&self) -> termwiz::widgets::layout::Constraints {
-        let mut c = termwiz::widgets::layout::Constraints::default();
-        c.set_halign(termwiz::widgets::layout::HorizontalAlignment::Right);
-        c.set_pct_width(80);
-        c
     }
 }
