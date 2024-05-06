@@ -5,8 +5,8 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4.5.4", features = ["derive"] }
-portable-pty = { git = "https://github.com/wez/wezterm.git", rev= "8fa4ba9ace4e3e9bb17246e6dcfe1ec175ff49aa" }
+portable-pty = { git = "https://github.com/wez/wezterm.git", rev = "8fa4ba9ace4e3e9bb17246e6dcfe1ec175ff49aa" }
 serde = { version = "1.0.200", features = ["derive"] }
-termwiz = { git = "https://github.com/wez/wezterm.git", rev= "8fa4ba9ace4e3e9bb17246e6dcfe1ec175ff49aa" }
+termwiz = { git = "https://github.com/wez/wezterm.git", features = ["widgets"], rev = "8fa4ba9ace4e3e9bb17246e6dcfe1ec175ff49aa" }
 toml = "0.8.12"
-wezterm-term = { git = "https://github.com/wez/wezterm.git", rev= "8fa4ba9ace4e3e9bb17246e6dcfe1ec175ff49aa" }
+wezterm-term = { git = "https://github.com/wez/wezterm.git", rev = "8fa4ba9ace4e3e9bb17246e6dcfe1ec175ff49aa" }
