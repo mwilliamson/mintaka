@@ -1,0 +1,9 @@
+[package]
+name = "mintaka"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+portable-pty = { git = "https://github.com/wez/wezterm.git", rev= "8fa4ba9ace4e3e9bb17246e6dcfe1ec175ff49aa" }
+termwiz = { git = "https://github.com/wez/wezterm.git", rev= "8fa4ba9ace4e3e9bb17246e6dcfe1ec175ff49aa" }
+wezterm-term = { git = "https://github.com/wez/wezterm.git", rev= "8fa4ba9ace4e3e9bb17246e6dcfe1ec175ff49aa" }
