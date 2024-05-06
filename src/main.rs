@@ -23,12 +23,13 @@ fn main() {
 
     let mut ui = termwiz::widgets::Ui::new();
     let ui_root_id = ui.set_root(MainScreen);
-    ui.add_child(ui_root_id, ProcessListPane {
+    let process_list_pane_id = ui.add_child(ui_root_id, ProcessListPane {
         processes: &processes,
     });
     ui.add_child(ui_root_id, ProcessPane {
         processes: &processes
     });
+    ui.set_focus(process_list_pane_id);
 
     loop {
         ui.process_event_queue().unwrap();
@@ -58,8 +59,7 @@ fn main() {
 struct MainScreen;
 
 impl termwiz::widgets::Widget for MainScreen {
-    fn render(&mut self, args: &mut termwiz::widgets::RenderArgs) {
-        args.cursor.visibility = CursorVisibility::Hidden;
+    fn render(&mut self, _args: &mut termwiz::widgets::RenderArgs) {
     }
 
     fn get_size_constraints(&self) -> termwiz::widgets::layout::Constraints {
@@ -75,6 +75,7 @@ struct ProcessListPane<'a> {
 
 impl termwiz::widgets::Widget for ProcessListPane<'_> {
     fn render(&mut self, args: &mut termwiz::widgets::RenderArgs) {
+        args.cursor.visibility = CursorVisibility::Hidden;
         args.surface.add_change(Change::ClearScreen(Default::default()));
         for (process_index, process) in self.processes.processes().into_iter().enumerate() {
             args.surface.add_change(Change::Text(format!("{}. ", process_index + 1)));
