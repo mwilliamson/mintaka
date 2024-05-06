@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use termwiz::{input::InputEvent, surface::Change, terminal::Terminal, widgets::{CursorShapeAndPosition, WidgetEvent}};
+use termwiz::{input::InputEvent, surface::{Change, CursorVisibility}, terminal::Terminal, widgets::WidgetEvent};
 use wezterm_term::CellAttributes;
 
 use crate::processes::Processes;
@@ -62,7 +62,8 @@ fn main() {
 struct MainScreen;
 
 impl termwiz::widgets::Widget for MainScreen {
-    fn render(&mut self, _args: &mut termwiz::widgets::RenderArgs) {
+    fn render(&mut self, args: &mut termwiz::widgets::RenderArgs) {
+        args.cursor.visibility = CursorVisibility::Hidden;
     }
 
     fn get_size_constraints(&self) -> termwiz::widgets::layout::Constraints {
