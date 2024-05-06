@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use termwiz::{color::{AnsiColor, ColorAttribute}, input::{InputEvent, KeyEvent}, surface::{Change, CursorVisibility}, terminal::Terminal, widgets::WidgetEvent};
+use termwiz::{color::AnsiColor, input::{InputEvent, KeyEvent}, surface::{Change, CursorVisibility}, terminal::Terminal, widgets::WidgetEvent};
 use wezterm_term::{AttributeChange, CellAttributes, KeyCode};
 
 use crate::processes::Processes;
@@ -84,24 +84,24 @@ impl termwiz::widgets::Widget for ProcessListPane {
         let processes = self.processes.lock().unwrap();
         for (process_index, process) in processes.processes().into_iter().enumerate() {
             let is_focused = processes.focused_process_index == process_index;
-            if is_focused {
-                args.surface.add_change(Change::Attribute(
-                    AttributeChange::Background(ColorAttribute::from(AnsiColor::Black))
-                ));
-                args.surface.add_change(Change::Attribute(
-                    AttributeChange::Foreground(ColorAttribute::from(AnsiColor::White))
-                ));
+
+            let (foreground_color, background_color) = if is_focused {
+                (AnsiColor::White, AnsiColor::Black)
             } else {
-                args.surface.add_change(Change::Attribute(
-                    AttributeChange::Background(ColorAttribute::from(AnsiColor::White))
-                ));
-                args.surface.add_change(Change::Attribute(
-                    AttributeChange::Foreground(ColorAttribute::from(AnsiColor::Black))
-                ));
-            }
+                (AnsiColor::Black, AnsiColor::White)
+            };
+
+            args.surface.add_change(Change::Attribute(
+                AttributeChange::Background(background_color.into())
+            ));
+            args.surface.add_change(Change::Attribute(
+                AttributeChange::Foreground(foreground_color.into())
+            ));
 
             args.surface.add_change(Change::Text(format!("{}. ", process_index + 1)));
             args.surface.add_change(Change::Text(process.name.clone()));
+
+            args.surface.add_change(Change::ClearToEndOfLine(background_color.into()));
             args.surface.add_change(Change::Text("\r\n".to_owned()));
         }
     }
