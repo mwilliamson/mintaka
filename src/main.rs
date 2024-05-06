@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use termwiz::{input::InputEvent, surface::Change, terminal::Terminal, widgets::WidgetEvent};
+use termwiz::{input::InputEvent, surface::Change, terminal::Terminal, widgets::{CursorShapeAndPosition, WidgetEvent}};
 use wezterm_term::CellAttributes;
 
 use crate::processes::Processes;
@@ -79,7 +79,8 @@ struct ProcessListPane<'a> {
 impl termwiz::widgets::Widget for ProcessListPane<'_> {
     fn render(&mut self, args: &mut termwiz::widgets::RenderArgs) {
         args.surface.add_change(Change::ClearScreen(Default::default()));
-        for process in self.processes.processes() {
+        for (process_index, process) in self.processes.processes().into_iter().enumerate() {
+            args.surface.add_change(Change::Text(format!("{}. ", process_index + 1)));
             args.surface.add_change(Change::Text(process.name.clone()));
             args.surface.add_change(Change::Text("\r\n".to_owned()));
         }
