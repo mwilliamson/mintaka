@@ -159,9 +159,13 @@ fn process_list_labels(processes: & Processes) -> impl Iterator<Item=ListItem> {
                 ProcessStatus::Ok => {
                     ("OK".to_owned(), Color::Green)
                 },
-                // TODO: limit error count
                 ProcessStatus::Errors { error_count } => {
-                    (format!("ERR ({error_count})"), Color::Red)
+                    let error_count_str = if error_count >= 100 {
+                        "99+".to_owned()
+                    } else {
+                        format!("{error_count}")
+                    };
+                    (format!("ERR ({error_count_str})"), Color::Red)
                 }
             };
             let status_style = Style::default()
