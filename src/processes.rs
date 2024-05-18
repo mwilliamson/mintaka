@@ -348,6 +348,9 @@ impl ProcessInstance {
 
                     let mut process_status_locked = process_status.lock().unwrap();
                     *process_status_locked = ProcessStatus::Exited { exit_code: exit_code.exit_code() };
+
+                    on_change.wake().unwrap();
+
                     break;
                 }
 
