@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use processes::Process;
-use ratatui::{backend::TermwizBackend, buffer::Buffer, layout::{Constraint, Layout, Rect}, style::{Color, Style}, widgets::{Block, List, ListState, Widget}, Frame};
+use ratatui::{backend::TermwizBackend, buffer::Buffer, layout::{Constraint, Layout, Rect}, style::{Color, Style}, widgets::{Block, List, ListItem, ListState, Widget}, Frame};
 use termwiz::{caps::ProbeHints, input::{InputEvent, KeyEvent}, surface::{Change, Surface}, terminal::{buffered::BufferedTerminal, SystemTerminal, Terminal}};
 use wezterm_term::{CellAttributes, KeyCode, KeyModifiers};
 
@@ -102,9 +102,8 @@ fn main() {
 }
 
 fn render_main(processes: &Processes, process_pane: &mut ProcessPane, frame: &mut Frame) {
-    // TODO: fit to label width?
     let layout = Layout::horizontal([
-        Constraint::Length(30),
+        Constraint::Length(process_list_width(processes) as u16),
         Constraint::Min(30),
     ]).split(frame.size());
 
@@ -113,17 +112,39 @@ fn render_main(processes: &Processes, process_pane: &mut ProcessPane, frame: &mu
     render_process_pane(process_pane, layout[1], frame);
 }
 
+fn process_list_width(processes: &Processes) -> usize {
+    let process_labels = process_list_labels(processes);
+    let min_label_width = 10;
+    let label_width = process_labels
+        .map(|label| label.width())
+        .max()
+        .unwrap_or(min_label_width)
+        .max(min_label_width);
+    // TODO: Is there a way to calculate this programatically from the block?
+    let border_width = 1;
+    label_width + border_width * 2
+}
+
 fn render_process_list(processes: &Processes, area: Rect, frame: &mut Frame) {
-    let process_labels = processes.processes()
-        .into_iter()
-        .enumerate()
-        .map(|(process_index, process)| process_label(process_index, process));
+    let process_labels = process_list_labels(processes);
     let process_list = List::new(process_labels)
         .block(Block::bordered())
         .highlight_style(Style::default().fg(Color::White).bg(Color::Black));
     let mut process_list_state = ListState::default().with_selected(Some(processes.focused_process_index));
     frame.render_stateful_widget(&process_list, area, &mut process_list_state);
 }
+
+fn process_list_labels(processes: & Processes) -> impl Iterator<Item=ListItem> {
+    processes.processes()
+        .into_iter()
+        .enumerate()
+        .map(|(process_index, process)| ListItem::new(process_label(process_index, process)))
+}
+
+fn process_label(process_index: usize, process: &Process) -> String {
+    format!(" {}. {} ", process_index + 1, process.name)
+}
+
 
 fn render_process_pane(process_pane: &mut ProcessPane, area: Rect, frame: &mut Frame) {
     // TODO: render directly?
@@ -146,8 +167,4 @@ impl Widget for &mut ProcessPane {
     fn render(self, area: Rect, _buf: &mut Buffer) {
         self.area = area;
     }
-}
-
-fn process_label(process_index: usize, process: &Process) -> String {
-    format!("{}. {}", process_index + 1, process.name)
 }
