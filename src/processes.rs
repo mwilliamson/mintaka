@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 
+use multimap::MultiMap;
 use portable_pty::{ExitStatus, PtyPair, PtySize, PtySystem};
 use termwiz::terminal::TerminalWaker;
 use wezterm_term::{TerminalSize, VisibleRowIndex};
@@ -16,6 +17,8 @@ pub(crate) struct Processes {
     pub(crate) focused_process_index: usize,
 
     on_change: TerminalWaker,
+
+    after: MultiMap<String, usize>,
 }
 
 impl Processes {
@@ -34,6 +37,7 @@ impl Processes {
             processes: Vec::new(),
             focused_process_index: 0,
             on_change,
+            after: MultiMap::new(),
         }
     }
 
@@ -43,9 +47,13 @@ impl Processes {
     ) -> Result<(), ProcessError> {
         let pty_pair = self.pty_system.openpty(self.pty_size).unwrap();
 
-        let process = Process::start(process_config, pty_pair, self.on_change.clone())?;
+        let process = Process::start(&process_config, pty_pair, self.on_change.clone())?;
 
         self.processes.push(process);
+
+        if let Some(after) = &process_config.after {
+            self.after.insert(after.to_owned(), self.processes.len() - 1);
+        }
 
         Ok(())
     }
@@ -113,7 +121,7 @@ pub(crate) struct Process {
 
 impl Process {
     fn start(
-        process_config: ProcessConfig,
+        process_config: &ProcessConfig,
         pty_pair: PtyPair,
         on_change: TerminalWaker,
     ) -> Result<Self, ProcessError> {
@@ -138,7 +146,7 @@ impl Process {
         );
 
         Ok(Process {
-            name: process_config.name.unwrap_or_else(|| process_config.command.join(" ")),
+            name: process_config.name.clone().unwrap_or_else(|| process_config.command.join(" ")),
             status: process_status,
             terminal,
             pty_master: pty_pair.master,

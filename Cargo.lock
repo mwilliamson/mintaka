@@ -1000,6 +1000,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "lazy_static",
+ "multimap",
  "portable-pty",
  "ratatui",
  "regex",
@@ -1007,6 +1008,15 @@ dependencies = [
  "termwiz",
  "toml",
  "wezterm-term",
+]
+
+[[package]]
+name = "multimap"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "defc4c55412d89136f966bbb339008b474350e5e6e78d2714439c386b3137a03"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

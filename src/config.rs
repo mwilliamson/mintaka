@@ -17,6 +17,8 @@ pub(crate) struct ProcessConfig {
 
     #[serde(rename = "type")]
     process_type: Option<ProcessTypeConfig>,
+
+    pub(crate) after: Option<String>,
 }
 
 impl ProcessConfig {
