@@ -102,7 +102,7 @@ fn process_list_labels(processes: & Processes) -> impl Iterator<Item=ListItem> {
             };
             let status_str = match process.status() {
                 ProcessStatus::NotStarted => {
-                    String::new()
+                    "INACTIVE".to_owned()
                 },
                 ProcessStatus::Running => {
                     "RUNNING".to_owned()
