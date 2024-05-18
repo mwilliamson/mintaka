@@ -60,10 +60,12 @@ fn main() {
                     match key_event.key {
                         wezterm_term::KeyCode::UpArrow => {
                             let mut processes = processes.lock().unwrap();
+                            processes.disable_autofocus();
                             processes.move_focus_up();
                         },
                         wezterm_term::KeyCode::DownArrow => {
                             let mut processes = processes.lock().unwrap();
+                            processes.disable_autofocus();
                             processes.move_focus_down();
                         },
                         wezterm_term::KeyCode::Char('a') => {

@@ -49,6 +49,10 @@ impl Processes {
         }
     }
 
+    pub(crate) fn disable_autofocus(&mut self) {
+        self.autofocus = false;
+    }
+
     pub(crate) fn toggle_autofocus(&mut self) {
         self.autofocus = !self.autofocus;
     }
