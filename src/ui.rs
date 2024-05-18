@@ -47,7 +47,14 @@ fn render_main(processes: &Processes, process_pane: &mut ProcessPane, frame: &mu
         Constraint::Min(30),
     ]).split(frame.size());
 
-    render_process_list(processes, layout[0], frame);
+    let left_layout = Layout::vertical([
+        Constraint::Fill(1),
+        Constraint::Length(1),
+    ]).split(layout[0]);
+
+    render_process_list(processes, left_layout[0], frame);
+
+    render_focus(processes, left_layout[1], frame);
 
     render_process_pane(process_pane, layout[1], frame);
 }
@@ -133,6 +140,18 @@ fn process_list_labels(processes: & Processes) -> impl Iterator<Item=ListItem> {
         })
 }
 
+fn render_focus(processes: &Processes, area: Rect, frame: &mut Frame) {
+    let focus_str = if processes.autofocus() {
+        "Auto"
+    } else {
+        "Manual"
+    };
+
+    frame.render_widget(
+        Line::raw(format!("  Focus: {focus_str}")),
+        area,
+    );
+}
 
 fn render_process_pane(process_pane: &mut ProcessPane, area: Rect, frame: &mut Frame) {
     // TODO: render directly?

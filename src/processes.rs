@@ -53,6 +53,10 @@ impl Processes {
         self.autofocus = !self.autofocus;
     }
 
+    pub(crate) fn autofocus(&self) -> bool {
+        self.autofocus
+    }
+
     pub(crate) fn start_process(
         &mut self,
         process_config: ProcessConfig,
