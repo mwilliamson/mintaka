@@ -9,7 +9,7 @@ pub(crate) struct MintakaConfig {
     pub(crate) processes: Vec<ProcessConfig>,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 pub(crate) struct ProcessConfig {
     pub(crate) command: Vec<String>,
 
@@ -30,7 +30,7 @@ impl ProcessConfig {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 enum ProcessTypeConfig {
     TscWatch,

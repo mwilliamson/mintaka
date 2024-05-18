@@ -90,7 +90,7 @@ fn process_list_labels(processes: & Processes) -> impl Iterator<Item=ListItem> {
             };
 
             text.push_line(Line::styled(
-                format!(" {}. {} ", process_index + 1, process.name),
+                format!(" {}. {} ", process_index + 1, process.name()),
                 style
             ));
 
@@ -101,6 +101,9 @@ fn process_list_labels(processes: & Processes) -> impl Iterator<Item=ListItem> {
                 Color::Red
             };
             let status_str = match process.status() {
+                ProcessStatus::NotStarted => {
+                    String::new()
+                },
                 ProcessStatus::Running => {
                     "RUNNING".to_owned()
                 },

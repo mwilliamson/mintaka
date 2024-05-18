@@ -7,8 +7,10 @@ use wezterm_term::{TerminalSize, VisibleRowIndex};
 
 use crate::{config::ProcessConfig, process_types::{self, ProcessType}};
 
+type SharedPtySystem = Arc<Box<dyn PtySystem + Send>>;
+
 pub(crate) struct Processes {
-    pty_system: Box<dyn PtySystem>,
+    pty_system: SharedPtySystem,
 
     pty_size: portable_pty::PtySize,
 
@@ -25,7 +27,7 @@ pub(crate) struct Processes {
 
 impl Processes {
     pub(crate) fn new(on_change: TerminalWaker) -> Self {
-        let pty_system = portable_pty::native_pty_system();
+        let pty_system = Arc::new(portable_pty::native_pty_system());
         let pty_size = portable_pty::PtySize {
             rows: 24,
             cols: 80,
@@ -48,20 +50,22 @@ impl Processes {
         &mut self,
         process_config: ProcessConfig,
     ) -> Result<(), ProcessError> {
-        let pty_pair = self.pty_system.openpty(self.pty_size).unwrap();
-
-        let process = Process::start(
-            &process_config,
-            pty_pair,
-            self.on_change.clone(),
-            Arc::clone(&self.success_notifications),
-        )?;
-
-        self.processes.push(process);
-
         if let Some(after) = &process_config.after {
             self.after.insert(after.to_owned(), self.processes.len() - 1);
         }
+
+        let mut process = Process::new(
+            process_config,
+            Arc::clone(&self.pty_system),
+            self.pty_size,
+            self.on_change.clone(),
+            Arc::clone(&self.success_notifications),
+        );
+
+        // TODO: handle errors (we're now in an inconsistent state).
+        process.start()?;
+
+        self.processes.push(process);
 
         Ok(())
     }
@@ -113,6 +117,9 @@ impl Processes {
 
 #[derive(Clone, Copy)]
 pub(crate) enum ProcessStatus {
+    /// The process has not been started.
+    NotStarted,
+
     /// The process is running and has not reached a success or error state.
     Running,
 
@@ -133,6 +140,7 @@ pub(crate) enum ProcessStatus {
 impl ProcessStatus {
     pub(crate) fn is_ok(&self) -> bool {
         match self {
+            ProcessStatus::NotStarted => true,
             ProcessStatus::Running => true,
             ProcessStatus::Success => true,
             ProcessStatus::Errors { .. } => false,
@@ -142,39 +150,80 @@ impl ProcessStatus {
 }
 
 pub(crate) struct Process {
-    pub(crate) name: String,
-    instance: ProcessInstance,
+    name: String,
+    process_config: ProcessConfig,
+    // TODO: bundle up pty_system and pty_size?
+    pty_system: SharedPtySystem,
+    pty_size: PtySize,
+    instance: Option<ProcessInstance>,
+    on_change: TerminalWaker,
+    success_notifications: Arc<Mutex<HashSet<String>>>,
 }
 
 impl Process {
-    fn start(
-        process_config: &ProcessConfig,
-        pty_pair: PtyPair,
+    fn new(
+        process_config: ProcessConfig,
+        pty_system: SharedPtySystem,
+        pty_size: PtySize,
         on_change: TerminalWaker,
         success_notifications: Arc<Mutex<HashSet<String>>>,
-    ) -> Result<Self, ProcessError> {
-        let instance = ProcessInstance::start(process_config, pty_pair, on_change, success_notifications)?;
-        let process_name = process_config.name.clone()
+    ) -> Self {
+        let name = process_config.name.clone()
             .unwrap_or_else(|| process_config.command.join(" "));
 
-        Ok(Self {
-            name: process_name,
-            instance,
-        })
+        Self {
+            name,
+            process_config,
+            pty_system,
+            pty_size,
+            instance: None,
+            on_change,
+            success_notifications,
+        }
+    }
+
+    fn start(
+        &mut self,
+    ) -> Result<(), ProcessError> {
+        let pty_pair = self.pty_system.openpty(self.pty_size).unwrap();
+
+        let instance = ProcessInstance::start(
+            &self.process_config,
+            pty_pair,
+            self.on_change.clone(),
+            Arc::clone(&self.success_notifications),
+        )?;
+
+        self.instance = Some(instance);
+
+        Ok(())
+    }
+
+    pub(crate) fn name(&self) -> &str {
+        &self.name
     }
 
     fn trigger(&mut self) {}
 
     fn resize(&mut self, pty_size: PtySize) {
-        self.instance.resize(pty_size);
+        if let Some(instance) = &mut self.instance {
+            instance.resize(pty_size);
+        }
     }
 
     pub(crate) fn status(&self) -> ProcessStatus {
-        self.instance.status()
+        match &self.instance {
+            None => ProcessStatus::NotStarted,
+            Some(instance) => instance.status(),
+        }
+
     }
 
     fn lines(&self) -> Vec<wezterm_term::Line> {
-        self.instance.lines()
+        match &self.instance {
+            None => Vec::new(),
+            Some(instance) => instance.lines(),
+        }
     }
 }
 
