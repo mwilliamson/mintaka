@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
-use processes::Process;
-use ratatui::{backend::TermwizBackend, buffer::Buffer, layout::{Constraint, Layout, Rect}, style::{Color, Style}, widgets::{Block, List, ListItem, ListState, Widget}, Frame};
+use processes::{ProcessStatus};
+use ratatui::{backend::TermwizBackend, buffer::Buffer, layout::{Constraint, Layout, Rect}, style::{Color, Style, Stylize}, text::{Line, Text}, widgets::{Block, List, ListItem, ListState, Widget}, Frame};
 use termwiz::{caps::ProbeHints, input::{InputEvent, KeyEvent}, surface::{Change, Surface}, terminal::{buffered::BufferedTerminal, SystemTerminal, Terminal}};
 use wezterm_term::{CellAttributes, KeyCode, KeyModifiers};
 
@@ -128,21 +128,46 @@ fn process_list_width(processes: &Processes) -> usize {
 fn render_process_list(processes: &Processes, area: Rect, frame: &mut Frame) {
     let process_labels = process_list_labels(processes);
     let process_list = List::new(process_labels)
-        .block(Block::bordered())
-        .highlight_style(Style::default().fg(Color::White).bg(Color::Black));
+        .block(Block::bordered());
+    // TODO: maintain list state
     let mut process_list_state = ListState::default().with_selected(Some(processes.focused_process_index));
     frame.render_stateful_widget(&process_list, area, &mut process_list_state);
 }
 
 fn process_list_labels(processes: & Processes) -> impl Iterator<Item=ListItem> {
+    let normal_style = Style::default().fg(Color::Black).bg(Color::White);
+    let focused_style = Style::default().fg(Color::White).bg(Color::Black);
+
     processes.processes()
         .into_iter()
         .enumerate()
-        .map(|(process_index, process)| ListItem::new(process_label(process_index, process)))
-}
+        .map(move |(process_index, process)| {
+            let mut text = Text::default();
+            let style = if processes.focused_process_index == process_index {
+                focused_style
+            } else {
+                normal_style
+            };
 
-fn process_label(process_index: usize, process: &Process) -> String {
-    format!(" {}. {} ", process_index + 1, process.name)
+            text.push_line(Line::styled(
+                format!(" {}. {} ", process_index + 1, process.name),
+                style
+            ));
+
+            let (status_str, status_color) = match process.status {
+                ProcessStatus::Ok => {
+                    ("OK", Color::Green)
+                },
+            };
+            let status_style = Style::default()
+                .fg(status_color)
+                .bg(style.bg.unwrap())
+                .bold();
+
+            text.push_line(Line::styled(format!("    {status_str}"), status_style));
+
+            ListItem::new(text)
+        })
 }
 
 

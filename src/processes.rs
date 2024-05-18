@@ -56,6 +56,7 @@ impl Processes {
 
         let process = Process {
             name: process_config.name.unwrap_or_else(|| process_config.command.join(" ")),
+            status: ProcessStatus::Ok,
             _child_process: child_process,
             terminal,
             pty_master: pty_pair.master,
@@ -152,8 +153,13 @@ impl Processes {
     }
 }
 
+pub(crate) enum ProcessStatus {
+    Ok,
+}
+
 pub(crate) struct Process {
     pub(crate) name: String,
+    pub(crate) status: ProcessStatus,
     _child_process: Box<dyn portable_pty::Child>,
     terminal: Arc<Mutex<wezterm_term::Terminal>>,
     pty_master: Box<dyn portable_pty::MasterPty>,
