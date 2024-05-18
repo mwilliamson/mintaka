@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::{collections::HashSet, sync::{Arc, Mutex}};
 
 use multimap::MultiMap;
 use portable_pty::{ExitStatus, PtyPair, PtySize, PtySystem};
@@ -19,6 +19,8 @@ pub(crate) struct Processes {
     on_change: TerminalWaker,
 
     after: MultiMap<String, usize>,
+
+    success_notifications: Arc<Mutex<HashSet<String>>>,
 }
 
 impl Processes {
@@ -38,6 +40,7 @@ impl Processes {
             focused_process_index: 0,
             on_change,
             after: MultiMap::new(),
+            success_notifications: Arc::new(Mutex::new(HashSet::new())),
         }
     }
 
@@ -47,7 +50,12 @@ impl Processes {
     ) -> Result<(), ProcessError> {
         let pty_pair = self.pty_system.openpty(self.pty_size).unwrap();
 
-        let process = Process::start(&process_config, pty_pair, self.on_change.clone())?;
+        let process = Process::start(
+            &process_config,
+            pty_pair,
+            self.on_change.clone(),
+            Arc::clone(&self.success_notifications),
+        )?;
 
         self.processes.push(process);
 
@@ -56,6 +64,18 @@ impl Processes {
         }
 
         Ok(())
+    }
+
+    pub(crate) fn do_work(&mut self) {
+        let mut success_notifications_locked = self.success_notifications.lock().unwrap();
+
+        for process_name in success_notifications_locked.drain() {
+            if let Some(process_indexes) = self.after.get_vec_mut(&process_name) {
+                for process_index in process_indexes {
+                    self.processes[*process_index].trigger()
+                }
+            }
+        }
     }
 
     pub(crate) fn processes(&self) -> &[Process] {
@@ -133,7 +153,11 @@ impl Process {
         process_config: &ProcessConfig,
         pty_pair: PtyPair,
         on_change: TerminalWaker,
+        success_notifications: Arc<Mutex<HashSet<String>>>,
     ) -> Result<Self, ProcessError> {
+        let process_name = process_config.name.clone()
+            .unwrap_or_else(|| process_config.command.join(" "));
+
         let pty_command = Self::process_config_to_pty_command(&process_config)?;
 
         let child_process = pty_pair.slave.spawn_command(pty_command).unwrap();
@@ -146,21 +170,25 @@ impl Process {
 
         let child_process_reader = pty_pair.master.try_clone_reader().unwrap();
         Self::spawn_process_reader(
+            process_name.clone(),
             process_config.process_type(),
             child_process,
             child_process_reader,
             Arc::clone(&process_status),
             Arc::clone(&terminal),
             on_change,
+            success_notifications,
         );
 
         Ok(Process {
-            name: process_config.name.clone().unwrap_or_else(|| process_config.command.join(" ")),
+            name: process_name,
             status: process_status,
             terminal,
             pty_master: pty_pair.master,
         })
     }
+
+    fn trigger(&mut self) {}
 
     fn process_config_to_pty_command(process_config: &ProcessConfig) -> Result<portable_pty::CommandBuilder, ProcessError> {
         let executable = process_config.command.first()
@@ -188,12 +216,14 @@ impl Process {
     }
 
     fn spawn_process_reader(
+        process_name: String,
         process_type: ProcessType,
         mut child_process: Box<dyn portable_pty::Child>,
         mut reader: Box<dyn std::io::Read + Send>,
         process_status: Arc<Mutex<ProcessStatus>>,
         terminal: Arc<Mutex<wezterm_term::Terminal>>,
         on_change: TerminalWaker,
+        success_notifications: Arc<Mutex<HashSet<String>>>,
     ) {
         std::thread::spawn(move || {
             let mut bytes = vec![0; 256];
@@ -231,6 +261,11 @@ impl Process {
                             if let Some(new_status) = process_types::status(&process_type, &last_line) {
                                 let mut process_status_locked = process_status.lock().unwrap();
                                 *process_status_locked = new_status;
+
+                                if matches!(new_status, ProcessStatus::Success) {
+                                    let mut success_notifications_locked = success_notifications.lock().unwrap();
+                                    success_notifications_locked.insert(process_name.clone());
+                                }
                             }
 
                             last_line.clear();

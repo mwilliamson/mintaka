@@ -32,6 +32,11 @@ fn main() {
     let processes = Arc::new(Mutex::new(processes));
 
     loop {
+        {
+            let mut processes_locked = processes.lock().unwrap();
+            processes_locked.do_work();
+        }
+
         render_ui(&processes, &mut terminal);
 
         let buffered_terminal = terminal.backend_mut().buffered_terminal_mut();
