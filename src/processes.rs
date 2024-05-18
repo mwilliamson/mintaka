@@ -1,7 +1,7 @@
 use std::{collections::HashSet, sync::{Arc, Mutex}};
 
 use multimap::MultiMap;
-use portable_pty::{ExitStatus, PtyPair, PtySize, PtySystem};
+use portable_pty::{ChildKiller, ExitStatus, PtyPair, PtySize, PtySystem};
 use termwiz::{escape::{parser::Parser, Esc, EscCode}, terminal::TerminalWaker};
 use wezterm_term::{TerminalSize, VisibleRowIndex};
 
@@ -62,14 +62,14 @@ impl Processes {
             Arc::clone(&self.success_notifications),
         );
 
-        process.start()?;
+        process.do_work()?;
 
         self.processes.push(process);
 
         Ok(())
     }
 
-    pub(crate) fn do_work(&mut self) {
+    pub(crate) fn do_work(&mut self) -> Result<(), ProcessError> {
         let mut success_notifications_locked = self.success_notifications.lock().unwrap();
 
         for process_name in success_notifications_locked.drain() {
@@ -81,8 +81,10 @@ impl Processes {
         }
 
         for process in &mut self.processes {
-            process.do_work();
+            process.do_work()?;
         }
+
+        Ok(())
     }
 
     pub(crate) fn processes(&self) -> &[Process] {
@@ -175,13 +177,15 @@ impl Process {
         let name = process_config.name.clone()
             .unwrap_or_else(|| process_config.command.join(" "));
 
+        let pending_restart = process_config.after.is_none();
+
         Self {
             name,
             process_config,
             pty_system,
             pty_size,
             instance: None,
-            pending_restart: false,
+            pending_restart,
             on_change,
             success_notifications,
         }
@@ -215,12 +219,13 @@ impl Process {
         self.pending_restart = true;
     }
 
-    fn do_work(&mut self) {
+    fn do_work(&mut self) -> Result<(), ProcessError> {
         if self.pending_restart && self.instance_is_stopped() {
-            // TODO: handle errors
-            self.start().unwrap();
+            self.start()?;
             self.pending_restart = false;
         }
+
+        Ok(())
     }
 
     fn instance_is_stopped(&self) -> bool {
@@ -256,6 +261,7 @@ pub(crate) struct ProcessInstance {
     status: Arc<Mutex<ProcessStatus>>,
     terminal: Arc<Mutex<wezterm_term::Terminal>>,
     pty_master: Box<dyn portable_pty::MasterPty>,
+    child_process_killer: Box<dyn ChildKiller + Send + Sync>,
 }
 
 impl ProcessInstance {
@@ -271,6 +277,7 @@ impl ProcessInstance {
         let pty_command = Self::process_config_to_pty_command(&process_config)?;
 
         let child_process = pty_pair.slave.spawn_command(pty_command).unwrap();
+        let child_process_killer = child_process.clone_killer();
         std::mem::drop(pty_pair.slave);
 
         let child_process_writer = pty_pair.master.take_writer().unwrap();
@@ -294,6 +301,7 @@ impl ProcessInstance {
             status: process_status,
             terminal,
             pty_master: pty_pair.master,
+            child_process_killer,
         })
     }
 
@@ -393,7 +401,13 @@ impl ProcessInstance {
     }
 
     fn kill(&mut self) {
-        // TODO
+        // Failures to kill are (hopefully) because the process has already
+        // stopped. We could check the status of the child process, but this
+        // may lead to a race condition.
+        //
+        // We could check the error we get back, but since the kind is
+        // `Uncategorized`, we'd need to check the message which feels fragile.
+        let _ = self.child_process_killer.kill();
     }
 
     fn resize(&mut self, pty_size: PtySize) {

@@ -34,7 +34,7 @@ fn main() {
     loop {
         {
             let mut processes_locked = processes.lock().unwrap();
-            processes_locked.do_work();
+            processes_locked.do_work().unwrap();
         }
 
         render_ui(&processes, &mut terminal);
