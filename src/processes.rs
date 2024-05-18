@@ -141,6 +141,10 @@ impl Processes {
             process.resize(self.pty_size);
         }
     }
+
+    pub(crate) fn restart_focused(&mut self) {
+        self.processes[self.focused_process_index].restart();
+    }
 }
 
 #[derive(Clone, Copy)]
