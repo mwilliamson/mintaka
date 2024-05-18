@@ -104,6 +104,9 @@ fn process_list_labels(processes: & Processes) -> impl Iterator<Item=ListItem> {
                 ProcessStatus::Running => {
                     "RUNNING".to_owned()
                 },
+                ProcessStatus::Success => {
+                    "SUCCESS".to_owned()
+                }
                 ProcessStatus::Errors { error_count } => {
                     let error_count_str = if error_count >= 100 {
                         "99+".to_owned()

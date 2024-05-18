@@ -7,12 +7,19 @@ lazy_static::lazy_static! {
 }
 
 pub(super) fn status(last_line: &str) -> Option<ProcessStatus> {
-    STATUS_REGEX.captures(last_line).and_then(|captures| {
-        let error_count: u64 = captures.get(1).unwrap().as_str().parse().unwrap();
-        return if error_count == 0 {
-            Some(ProcessStatus::Running)
-        } else {
-            Some(ProcessStatus::Errors { error_count })
-        };
-    })
+    if last_line.trim().is_empty() {
+        None
+    } else {
+        match STATUS_REGEX.captures(last_line) {
+            None => Some(ProcessStatus::Running),
+            Some(captures) => {
+                let error_count: u64 = captures.get(1).unwrap().as_str().parse().unwrap();
+                if error_count == 0 {
+                    Some(ProcessStatus::Success)
+                } else {
+                    Some(ProcessStatus::Errors { error_count })
+                }
+            }
+        }
+    }
 }

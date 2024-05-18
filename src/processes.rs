@@ -93,10 +93,18 @@ impl Processes {
 
 #[derive(Clone, Copy)]
 pub(crate) enum ProcessStatus {
+    /// The process is running and has not reached a success or error state.
     Running,
+
+    /// The process is running and has reached a success state.
+    Success,
+
+    /// The process is running and has reached an error state.
     Errors {
         error_count: u64,
     },
+
+    /// The process has exited.
     Exited {
         exit_code: u32,
     },
@@ -106,6 +114,7 @@ impl ProcessStatus {
     pub(crate) fn is_ok(&self) -> bool {
         match self {
             ProcessStatus::Running => true,
+            ProcessStatus::Success => true,
             ProcessStatus::Errors { .. } => false,
             ProcessStatus::Exited { exit_code } => *exit_code == 0,
         }
