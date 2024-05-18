@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use portable_pty::PtySystem;
 use termwiz::terminal::TerminalWaker;
-use wezterm_term::TerminalSize;
+use wezterm_term::{TerminalSize, VisibleRowIndex};
 
 use crate::config::ProcessConfig;
 
@@ -115,7 +115,7 @@ impl Processes {
 
     pub(crate) fn lines(&self) -> Vec<wezterm_term::Line> {
         let terminal = self.processes[self.focused_process_index].terminal.lock().unwrap();
-        terminal.screen().lines_in_phys_range(0..100)
+        terminal.screen().lines_in_phys_range(terminal.screen().phys_range(&(0..VisibleRowIndex::MAX)))
     }
 
     pub(crate) fn move_focus_up(&mut self) {
