@@ -21,9 +21,37 @@ Mintaka shows the status of all the processes at once, while automatically
 focusing on the first process that has a problem, allowing you to solve that
 problem before moving onto the next problem.
 
+For instance, running `mintaka -c config.toml` when there's a TypeScript error:
+
 ![A screenshot of Mintaka, showing a list of processes down the left-hand side
 with tsc highlighted, and the output of tsc on the right-hand side
 ](screenshot.png?raw=true)
+
+where `config.toml` is:
+
+```toml
+[[processes]]
+name = "Server"
+command = ["npm", "start"]
+
+[[processes]]
+name = "Cosmos"
+command = ["npm", "run", "cosmos"]
+
+[[processes]]
+name = "Build"
+command = ["npm", "run", "build-watch"]
+
+[[processes]]
+name = "tsc"
+command = ["npm", "run", "check:tsc", "--", "--watch"]
+type = "tsc-watch"
+
+[[processes]]
+name = "eslint"
+command = ["npm", "run", "check:eslint"]
+after = "tsc"
+```
 
 Note that Mintaka is still under early development: there are likely bugs,
 performance is probably quite poor, and the config file format might change.
