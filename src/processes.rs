@@ -55,8 +55,7 @@ impl Processes {
     }
 
     pub(crate) fn lines(&self) -> Vec<wezterm_term::Line> {
-        let terminal = self.processes[self.focused_process_index].terminal.lock().unwrap();
-        terminal.screen().lines_in_phys_range(terminal.screen().phys_range(&(0..VisibleRowIndex::MAX)))
+        self.processes[self.focused_process_index].lines()
     }
 
     pub(crate) fn move_focus_up(&mut self) {
@@ -221,6 +220,11 @@ impl Process {
 
     pub(crate) fn status(&self) -> ProcessStatus {
         *self.status.lock().unwrap()
+    }
+
+    fn lines(&self) -> Vec<wezterm_term::Line> {
+        let terminal = self.terminal.lock().unwrap();
+        terminal.screen().lines_in_phys_range(terminal.screen().phys_range(&(0..VisibleRowIndex::MAX)))
     }
 }
 
