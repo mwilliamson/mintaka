@@ -2,6 +2,8 @@ use std::{fs::OpenOptions, io::Read, path::Path};
 
 use serde::Deserialize;
 
+use crate::process_types::ProcessType;
+
 #[derive(Deserialize)]
 pub(crate) struct MintakaConfig {
     pub(crate) processes: Vec<ProcessConfig>,
@@ -14,7 +16,30 @@ pub(crate) struct ProcessConfig {
     pub(crate) name: Option<String>,
 
     #[serde(rename = "type")]
-    pub(crate) process_type: Option<String>,
+    process_type: Option<ProcessTypeConfig>,
+}
+
+impl ProcessConfig {
+    pub(crate) fn process_type(&self) -> ProcessType {
+        self.process_type.as_ref().map_or(
+            ProcessType::Unknown,
+            |process_type| process_type.to_process_type()
+        )
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "kebab-case")]
+enum ProcessTypeConfig {
+    TscWatch,
+}
+
+impl ProcessTypeConfig {
+    fn to_process_type(&self) -> ProcessType {
+        match self {
+            ProcessTypeConfig::TscWatch => ProcessType::TscWatch,
+        }
+    }
 }
 
 #[allow(dead_code)]

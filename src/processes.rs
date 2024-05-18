@@ -51,17 +51,15 @@ impl Processes {
         let child_process_writer = pty_pair.master.take_writer().unwrap();
         let terminal = Arc::new(Mutex::new(Self::create_process_terminal(child_process_writer)));
 
-        // TODO: proper handling of process type
-        let process_type = if process_config.process_type.as_deref() == Some("tsc-watch") {
-            ProcessType::TscWatch
-        } else {
-            ProcessType::Unknown
-        };
-
         let process_status = Arc::new(Mutex::new(ProcessStatus::Ok));
 
         let child_process_reader = pty_pair.master.try_clone_reader().unwrap();
-        self.spawn_process_reader(process_type, child_process_reader, Arc::clone(&process_status), Arc::clone(&terminal));
+        self.spawn_process_reader(
+            process_config.process_type(),
+            child_process_reader,
+            Arc::clone(&process_status),
+            Arc::clone(&terminal),
+        );
 
         let process = Process {
             name: process_config.name.unwrap_or_else(|| process_config.command.join(" ")),
