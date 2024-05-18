@@ -51,7 +51,7 @@ impl Processes {
         process_config: ProcessConfig,
     ) -> Result<(), ProcessError> {
         if let Some(after) = &process_config.after {
-            self.after.insert(after.to_owned(), self.processes.len() - 1);
+            self.after.insert(after.to_owned(), self.processes.len());
         }
 
         let mut process = Process::new(
@@ -62,7 +62,6 @@ impl Processes {
             Arc::clone(&self.success_notifications),
         );
 
-        // TODO: handle errors (we're now in an inconsistent state).
         process.start()?;
 
         self.processes.push(process);
@@ -76,9 +75,13 @@ impl Processes {
         for process_name in success_notifications_locked.drain() {
             if let Some(process_indexes) = self.after.get_vec_mut(&process_name) {
                 for process_index in process_indexes {
-                    self.processes[*process_index].trigger()
+                    self.processes[*process_index].restart()
                 }
             }
+        }
+
+        for process in &mut self.processes {
+            process.do_work();
         }
     }
 
@@ -156,6 +159,7 @@ pub(crate) struct Process {
     pty_system: SharedPtySystem,
     pty_size: PtySize,
     instance: Option<ProcessInstance>,
+    pending_restart: bool,
     on_change: TerminalWaker,
     success_notifications: Arc<Mutex<HashSet<String>>>,
 }
@@ -177,6 +181,7 @@ impl Process {
             pty_system,
             pty_size,
             instance: None,
+            pending_restart: false,
             on_change,
             success_notifications,
         }
@@ -203,7 +208,27 @@ impl Process {
         &self.name
     }
 
-    fn trigger(&mut self) {}
+    fn restart(&mut self) {
+        if let Some(instance) = &mut self.instance {
+            instance.kill();
+        }
+        self.pending_restart = true;
+    }
+
+    fn do_work(&mut self) {
+        if self.pending_restart && self.instance_is_stopped() {
+            // TODO: handle errors
+            self.start().unwrap();
+            self.pending_restart = false;
+        }
+    }
+
+    fn instance_is_stopped(&self) -> bool {
+        match &self.instance {
+            None => true,
+            Some(instance) => instance.is_stopped()
+        }
+    }
 
     fn resize(&mut self, pty_size: PtySize) {
         if let Some(instance) = &mut self.instance {
@@ -364,6 +389,10 @@ impl ProcessInstance {
         });
     }
 
+    fn kill(&mut self) {
+        // TODO
+    }
+
     fn resize(&mut self, pty_size: PtySize) {
         self.pty_master.resize(pty_size).unwrap();
         let mut terminal = self.terminal.lock().unwrap();
@@ -375,6 +404,10 @@ impl ProcessInstance {
             pixel_height: pty_size.pixel_height as usize,
             dpi,
         });
+    }
+
+    fn is_stopped(&self) -> bool {
+        matches!(self.status(), ProcessStatus::Exited { .. })
     }
 
     fn status(&self) -> ProcessStatus {
