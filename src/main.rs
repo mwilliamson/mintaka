@@ -114,7 +114,7 @@ fn render_main(processes: &Processes, process_pane: &mut ProcessPane, frame: &mu
 
 fn process_list_width(processes: &Processes) -> usize {
     let process_labels = process_list_labels(processes);
-    let min_label_width = 10;
+    let min_label_width = 15;
     let label_width = process_labels
         .map(|label| label.width())
         .max()
@@ -160,7 +160,7 @@ fn process_list_labels(processes: & Processes) -> impl Iterator<Item=ListItem> {
                 },
                 // TODO: limit error count
                 ProcessStatus::Errors { error_count } => {
-                    (format!("{error_count} Errors"), Color::Red)
+                    (format!("ERR ({error_count})"), Color::Red)
                 }
             };
             let status_style = Style::default()
