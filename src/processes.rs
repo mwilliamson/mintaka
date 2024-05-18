@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use portable_pty::{ExitStatus, PtyPair, PtySystem};
+use portable_pty::{ExitStatus, PtyPair, PtySize, PtySystem};
 use termwiz::terminal::TerminalWaker;
 use wezterm_term::{TerminalSize, VisibleRowIndex};
 
@@ -78,17 +78,8 @@ impl Processes {
     pub(crate) fn resize(&mut self, size: (usize, usize)) {
         self.pty_size.cols = size.0 as u16;
         self.pty_size.rows = size.1 as u16;
-        for process in &self.processes {
-            process.pty_master.resize(self.pty_size).unwrap();
-            let mut terminal = process.terminal.lock().unwrap();
-            let dpi = terminal.get_size().dpi;
-            terminal.resize(TerminalSize {
-                rows: self.pty_size.rows as usize,
-                cols: self.pty_size.cols as usize,
-                pixel_width: self.pty_size.pixel_width as usize,
-                pixel_height: self.pty_size.pixel_height as usize,
-                dpi,
-            });
+        for process in &mut self.processes {
+            process.resize(self.pty_size);
         }
     }
 }
@@ -212,6 +203,19 @@ impl Process {
 
                 on_change.wake().unwrap();
             }
+        });
+    }
+
+    fn resize(&mut self, pty_size: PtySize) {
+        self.pty_master.resize(pty_size).unwrap();
+        let mut terminal = self.terminal.lock().unwrap();
+        let dpi = terminal.get_size().dpi;
+        terminal.resize(TerminalSize {
+            rows: pty_size.rows as usize,
+            cols: pty_size.cols as usize,
+            pixel_width: pty_size.pixel_width as usize,
+            pixel_height: pty_size.pixel_height as usize,
+            dpi,
         });
     }
 
