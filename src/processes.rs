@@ -10,6 +10,8 @@ use crate::{config::ProcessConfig, process_types::{self, ProcessType}};
 type SharedPtySystem = Arc<Box<dyn PtySystem + Send>>;
 
 pub(crate) struct Processes {
+    autofocus: bool,
+
     pty_system: SharedPtySystem,
 
     pty_size: portable_pty::PtySize,
@@ -36,6 +38,7 @@ impl Processes {
         };
 
         Self {
+            autofocus: true,
             pty_system,
             pty_size,
             processes: Vec::new(),
@@ -44,6 +47,10 @@ impl Processes {
             after: MultiMap::new(),
             success_notifications: Arc::new(Mutex::new(HashSet::new())),
         }
+    }
+
+    pub(crate) fn toggle_autofocus(&mut self) {
+        self.autofocus = !self.autofocus;
     }
 
     pub(crate) fn start_process(
@@ -82,6 +89,14 @@ impl Processes {
 
         for process in &mut self.processes {
             process.do_work()?;
+        }
+
+        if self.autofocus {
+            self.focused_process_index = self.processes.iter()
+                .enumerate()
+                .find(|(_process_index, process)| !process.status().is_ok())
+                .map(|(process_index, _process)| process_index)
+                .unwrap_or(self.focused_process_index);
         }
 
         Ok(())

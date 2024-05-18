@@ -66,6 +66,10 @@ fn main() {
                             let mut processes = processes.lock().unwrap();
                             processes.move_focus_down();
                         },
+                        wezterm_term::KeyCode::Char('a') => {
+                            let mut processes = processes.lock().unwrap();
+                            processes.toggle_autofocus();
+                        }
                         _ => {},
                     }
                 }
