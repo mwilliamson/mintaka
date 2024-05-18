@@ -143,12 +143,48 @@ impl ProcessStatus {
 
 pub(crate) struct Process {
     pub(crate) name: String,
+    instance: ProcessInstance,
+}
+
+impl Process {
+    fn start(
+        process_config: &ProcessConfig,
+        pty_pair: PtyPair,
+        on_change: TerminalWaker,
+        success_notifications: Arc<Mutex<HashSet<String>>>,
+    ) -> Result<Self, ProcessError> {
+        let instance = ProcessInstance::start(process_config, pty_pair, on_change, success_notifications)?;
+        let process_name = process_config.name.clone()
+            .unwrap_or_else(|| process_config.command.join(" "));
+
+        Ok(Self {
+            name: process_name,
+            instance,
+        })
+    }
+
+    fn trigger(&mut self) {}
+
+    fn resize(&mut self, pty_size: PtySize) {
+        self.instance.resize(pty_size);
+    }
+
+    pub(crate) fn status(&self) -> ProcessStatus {
+        self.instance.status()
+    }
+
+    fn lines(&self) -> Vec<wezterm_term::Line> {
+        self.instance.lines()
+    }
+}
+
+pub(crate) struct ProcessInstance {
     status: Arc<Mutex<ProcessStatus>>,
     terminal: Arc<Mutex<wezterm_term::Terminal>>,
     pty_master: Box<dyn portable_pty::MasterPty>,
 }
 
-impl Process {
+impl ProcessInstance {
     fn start(
         process_config: &ProcessConfig,
         pty_pair: PtyPair,
@@ -180,15 +216,12 @@ impl Process {
             success_notifications,
         );
 
-        Ok(Process {
-            name: process_name,
+        Ok(Self {
             status: process_status,
             terminal,
             pty_master: pty_pair.master,
         })
     }
-
-    fn trigger(&mut self) {}
 
     fn process_config_to_pty_command(process_config: &ProcessConfig) -> Result<portable_pty::CommandBuilder, ProcessError> {
         let executable = process_config.command.first()
@@ -295,7 +328,7 @@ impl Process {
         });
     }
 
-    pub(crate) fn status(&self) -> ProcessStatus {
+    fn status(&self) -> ProcessStatus {
         *self.status.lock().unwrap()
     }
 
