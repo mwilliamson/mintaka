@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use multimap::MultiMap;
 use portable_pty::{ExitStatus, PtyPair, PtySize, PtySystem};
-use termwiz::terminal::TerminalWaker;
+use termwiz::{escape::{parser::Parser, Esc, EscCode}, terminal::TerminalWaker};
 use wezterm_term::{TerminalSize, VisibleRowIndex};
 
 use crate::{config::ProcessConfig, process_types::{self, ProcessType}};
@@ -188,6 +188,12 @@ impl Process {
     ) {
         std::thread::spawn(move || {
             let mut bytes = vec![0; 256];
+            let mut parser = Parser::new();
+            // TODO: Perhaps rather than separately storing the last line, track
+            // whether the screen has been cleared and use stable lines in the
+            // terminal screen?
+            let mut last_line = String::new();
+
             loop {
                 let bytes_read = reader.read(&mut bytes).unwrap();
                 if bytes_read == 0 {
@@ -198,15 +204,34 @@ impl Process {
                     *process_status_locked = ProcessStatus::Exited { exit_code: exit_code.exit_code() };
                     break;
                 }
-                let mut terminal_locked = terminal.lock().unwrap();
-                terminal_locked.advance_bytes(&bytes[..bytes_read]);
 
-                let screen = terminal_locked.screen();
+                let mut actions = Vec::new();
 
-                if let Some(new_status) = process_types::status(&process_type, screen) {
-                    let mut process_status_locked = process_status.lock().unwrap();
-                    *process_status_locked = new_status;
+                parser.parse(&bytes[..bytes_read], |action| actions.push(action));
+
+                for action in &actions {
+                    // TODO: handle other control codes?
+                    match action {
+                        termwiz::escape::Action::Print(char) => last_line.push(*char),
+                        termwiz::escape::Action::PrintString(string) => last_line.push_str(string),
+                        termwiz::escape::Action::Control(
+                            termwiz::escape::ControlCode::LineFeed |
+                            termwiz::escape::ControlCode::CarriageReturn
+                        ) |
+                        termwiz::escape::Action::Esc(Esc::Code(EscCode::FullReset)) => {
+                            if let Some(new_status) = process_types::status(&process_type, &last_line) {
+                                let mut process_status_locked = process_status.lock().unwrap();
+                                *process_status_locked = new_status;
+                            }
+
+                            last_line.clear();
+                        },
+                        _ => {},
+                    }
                 }
+
+                let mut terminal_locked = terminal.lock().unwrap();
+                terminal_locked.perform_actions(actions);
 
                 on_change.wake().unwrap();
             }
