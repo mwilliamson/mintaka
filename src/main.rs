@@ -10,6 +10,7 @@ use crate::processes::Processes;
 mod cli;
 mod config;
 mod processes;
+mod process_types;
 
 fn main() {
     let config = cli::load_config().unwrap();

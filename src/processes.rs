@@ -1,11 +1,10 @@
 use std::sync::{Arc, Mutex};
 
 use portable_pty::PtySystem;
-use regex::Regex;
 use termwiz::terminal::TerminalWaker;
 use wezterm_term::{TerminalSize, VisibleRowIndex};
 
-use crate::config::ProcessConfig;
+use crate::{config::ProcessConfig, process_types::{self, ProcessType}};
 
 pub(crate) struct Processes {
     pty_system: Box<dyn PtySystem>,
@@ -119,31 +118,11 @@ impl Processes {
                 let mut terminal_locked = terminal.lock().unwrap();
                 terminal_locked.advance_bytes(&bytes[..bytes_read]);
 
-                match process_type {
-                    ProcessType::TscWatch => {
-                        let screen = terminal_locked.screen();
-                        let rows = screen.lines_in_phys_range(screen.phys_range(&(0..VisibleRowIndex::MAX)));
-                        // TODO: ignore rows we've already processed
-                        for row in rows.iter().rev() {
-                            let row_str = row.as_str();
-                            let regex = Regex::new(" Found ([0-9]+) error[s]?\\. Watching for file changes\\.").unwrap();
-                            match regex.captures(&row_str) {
-                                Some(captures) => {
-                                    let error_count: u64 = captures.get(1).unwrap().as_str().parse().unwrap();
-                                    let mut process_status_locked = process_status.lock().unwrap();
-                                    let new_status = if error_count == 0 {
-                                        ProcessStatus::Ok
-                                    } else {
-                                        ProcessStatus::Errors { error_count }
-                                    };
-                                    *process_status_locked = new_status;
-                                    break;
-                                },
-                                None => {},
-                            }
-                        }
-                    },
-                    ProcessType::Unknown => {},
+                let screen = terminal_locked.screen();
+
+                if let Some(new_status) = process_types::status(&process_type, screen) {
+                    let mut process_status_locked = process_status.lock().unwrap();
+                    *process_status_locked = new_status;
                 }
 
                 on_change.wake().unwrap();
@@ -200,11 +179,6 @@ pub(crate) enum ProcessStatus {
     Errors {
         error_count: u64,
     }
-}
-
-pub(crate) enum ProcessType {
-    TscWatch,
-    Unknown,
 }
 
 pub(crate) struct Process {
