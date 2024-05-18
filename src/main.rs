@@ -155,9 +155,15 @@ fn process_list_labels(processes: & Processes) -> impl Iterator<Item=ListItem> {
                 style
             ));
 
-            let (status_str, status_color) = match process.status() {
-                ProcessStatus::Ok => {
-                    ("OK".to_owned(), Color::Green)
+            let status = process.status();
+            let status_color = if status.is_ok() {
+                Color::Green
+            } else {
+                Color::Red
+            };
+            let status_str = match process.status() {
+                ProcessStatus::Running => {
+                    "RUNNING".to_owned()
                 },
                 ProcessStatus::Errors { error_count } => {
                     let error_count_str = if error_count >= 100 {
@@ -165,7 +171,10 @@ fn process_list_labels(processes: & Processes) -> impl Iterator<Item=ListItem> {
                     } else {
                         format!("{error_count}")
                     };
-                    (format!("ERR ({error_count_str})"), Color::Red)
+                    format!("ERR ({error_count_str})")
+                },
+                ProcessStatus::Exited { exit_code } => {
+                    format!("EXIT {exit_code}")
                 }
             };
             let status_style = Style::default()

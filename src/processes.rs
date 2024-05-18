@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use portable_pty::{PtyPair, PtySystem};
+use portable_pty::{ExitStatus, PtyPair, PtySystem};
 use termwiz::terminal::TerminalWaker;
 use wezterm_term::{TerminalSize, VisibleRowIndex};
 
@@ -95,16 +95,28 @@ impl Processes {
 
 #[derive(Clone, Copy)]
 pub(crate) enum ProcessStatus {
-    Ok,
+    Running,
     Errors {
         error_count: u64,
+    },
+    Exited {
+        exit_code: u32,
+    },
+}
+
+impl ProcessStatus {
+    pub(crate) fn is_ok(&self) -> bool {
+        match self {
+            ProcessStatus::Running => true,
+            ProcessStatus::Errors { .. } => false,
+            ProcessStatus::Exited { exit_code } => *exit_code == 0,
+        }
     }
 }
 
 pub(crate) struct Process {
     pub(crate) name: String,
     status: Arc<Mutex<ProcessStatus>>,
-    _child_process: Box<dyn portable_pty::Child>,
     terminal: Arc<Mutex<wezterm_term::Terminal>>,
     pty_master: Box<dyn portable_pty::MasterPty>,
 }
@@ -123,11 +135,12 @@ impl Process {
         let child_process_writer = pty_pair.master.take_writer().unwrap();
         let terminal = Arc::new(Mutex::new(Self::create_process_terminal(child_process_writer)));
 
-        let process_status = Arc::new(Mutex::new(ProcessStatus::Ok));
+        let process_status = Arc::new(Mutex::new(ProcessStatus::Running));
 
         let child_process_reader = pty_pair.master.try_clone_reader().unwrap();
         Self::spawn_process_reader(
             process_config.process_type(),
+            child_process,
             child_process_reader,
             Arc::clone(&process_status),
             Arc::clone(&terminal),
@@ -137,7 +150,6 @@ impl Process {
         Ok(Process {
             name: process_config.name.unwrap_or_else(|| process_config.command.join(" ")),
             status: process_status,
-            _child_process: child_process,
             terminal,
             pty_master: pty_pair.master,
         })
@@ -170,6 +182,7 @@ impl Process {
 
     fn spawn_process_reader(
         process_type: ProcessType,
+        mut child_process: Box<dyn portable_pty::Child>,
         mut reader: Box<dyn std::io::Read + Send>,
         process_status: Arc<Mutex<ProcessStatus>>,
         terminal: Arc<Mutex<wezterm_term::Terminal>>,
@@ -180,6 +193,11 @@ impl Process {
             loop {
                 let bytes_read = reader.read(&mut bytes).unwrap();
                 if bytes_read == 0 {
+                    // TODO: handle failure to get exit code properly
+                    let exit_code = child_process.wait().unwrap_or(ExitStatus::with_exit_code(1));
+
+                    let mut process_status_locked = process_status.lock().unwrap();
+                    *process_status_locked = ProcessStatus::Exited { exit_code: exit_code.exit_code() };
                     break;
                 }
                 let mut terminal_locked = terminal.lock().unwrap();

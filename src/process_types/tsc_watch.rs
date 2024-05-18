@@ -12,7 +12,7 @@ pub(super) fn status(screen: &Screen) -> Option<ProcessStatus> {
         STATUS_REGEX.captures(&line_str).and_then(|captures| {
             let error_count: u64 = captures.get(1).unwrap().as_str().parse().unwrap();
             return if error_count == 0 {
-                Some(ProcessStatus::Ok)
+                Some(ProcessStatus::Running)
             } else {
                 Some(ProcessStatus::Errors { error_count })
             };
