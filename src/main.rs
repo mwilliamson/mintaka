@@ -32,7 +32,7 @@ fn main() {
     loop {
         {
             let mut processes = processes.lock().unwrap();
-            let mut process_pane = ProcessPane2::new();
+            let mut process_pane = ProcessPane::new();
             terminal.draw(|frame| {
                 render_main(&processes, &mut process_pane, frame);
             }).unwrap();
@@ -101,7 +101,7 @@ fn main() {
     }
 }
 
-fn render_main(processes: &Processes, process_pane: &mut ProcessPane2, frame: &mut Frame) {
+fn render_main(processes: &Processes, process_pane: &mut ProcessPane, frame: &mut Frame) {
     // TODO: fit to label width?
     let layout = Layout::horizontal([
         Constraint::Length(30),
@@ -125,16 +125,16 @@ fn render_process_list(processes: &Processes, area: Rect, frame: &mut Frame) {
     frame.render_stateful_widget(&process_list, area, &mut process_list_state);
 }
 
-fn render_process_pane(process_pane: &mut ProcessPane2, area: Rect, frame: &mut Frame) {
+fn render_process_pane(process_pane: &mut ProcessPane, area: Rect, frame: &mut Frame) {
     // TODO: render directly?
     frame.render_widget(process_pane, area);
 }
 
-struct ProcessPane2 {
+struct ProcessPane {
     area: Rect,
 }
 
-impl ProcessPane2 {
+impl ProcessPane {
     fn new() -> Self {
         Self {
             area: Rect::new(0, 0, 0, 0),
@@ -142,7 +142,7 @@ impl ProcessPane2 {
     }
 }
 
-impl Widget for &mut ProcessPane2 {
+impl Widget for &mut ProcessPane {
     fn render(self, area: Rect, _buf: &mut Buffer) {
         self.area = area;
     }
