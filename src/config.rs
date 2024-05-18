@@ -12,6 +12,9 @@ pub(crate) struct ProcessConfig {
     pub(crate) command: Vec<String>,
 
     pub(crate) name: Option<String>,
+
+    #[serde(rename = "type")]
+    pub(crate) process_type: Option<String>,
 }
 
 #[allow(dead_code)]

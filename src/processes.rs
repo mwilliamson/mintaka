@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use portable_pty::PtySystem;
+use regex::Regex;
 use termwiz::terminal::TerminalWaker;
 use wezterm_term::{TerminalSize, VisibleRowIndex};
 
@@ -51,12 +52,21 @@ impl Processes {
         let child_process_writer = pty_pair.master.take_writer().unwrap();
         let terminal = Arc::new(Mutex::new(Self::create_process_terminal(child_process_writer)));
 
+        // TODO: proper handling of process type
+        let process_type = if process_config.process_type.as_deref() == Some("tsc-watch") {
+            ProcessType::TscWatch
+        } else {
+            ProcessType::Unknown
+        };
+
+        let process_status = Arc::new(Mutex::new(ProcessStatus::Ok));
+
         let child_process_reader = pty_pair.master.try_clone_reader().unwrap();
-        self.spawn_process_reader(child_process_reader, Arc::clone(&terminal));
+        self.spawn_process_reader(process_type, child_process_reader, Arc::clone(&process_status), Arc::clone(&terminal));
 
         let process = Process {
             name: process_config.name.unwrap_or_else(|| process_config.command.join(" ")),
-            status: ProcessStatus::Ok,
+            status: process_status,
             _child_process: child_process,
             terminal,
             pty_master: pty_pair.master,
@@ -93,7 +103,9 @@ impl Processes {
 
     fn spawn_process_reader(
         &self,
+        process_type: ProcessType,
         mut reader: Box<dyn std::io::Read + Send>,
+        process_status: Arc<Mutex<ProcessStatus>>,
         terminal: Arc<Mutex<wezterm_term::Terminal>>,
     ) {
         let on_change = self.on_change.clone();
@@ -104,7 +116,36 @@ impl Processes {
                 if bytes_read == 0 {
                     break;
                 }
-                terminal.lock().unwrap().advance_bytes(&bytes[..bytes_read]);
+                let mut terminal_locked = terminal.lock().unwrap();
+                terminal_locked.advance_bytes(&bytes[..bytes_read]);
+
+                match process_type {
+                    ProcessType::TscWatch => {
+                        let screen = terminal_locked.screen();
+                        let rows = screen.lines_in_phys_range(screen.phys_range(&(0..VisibleRowIndex::MAX)));
+                        // TODO: ignore rows we've already processed
+                        for row in rows.iter().rev() {
+                            let row_str = row.as_str();
+                            let regex = Regex::new(" Found ([0-9]+) error[s]?\\. Watching for file changes\\.").unwrap();
+                            match regex.captures(&row_str) {
+                                Some(captures) => {
+                                    let error_count: u64 = captures.get(1).unwrap().as_str().parse().unwrap();
+                                    let mut process_status_locked = process_status.lock().unwrap();
+                                    let new_status = if error_count == 0 {
+                                        ProcessStatus::Ok
+                                    } else {
+                                        ProcessStatus::Errors { error_count }
+                                    };
+                                    *process_status_locked = new_status;
+                                    break;
+                                },
+                                None => {},
+                            }
+                        }
+                    },
+                    ProcessType::Unknown => {},
+                }
+
                 on_change.wake().unwrap();
             }
         });
@@ -153,16 +194,31 @@ impl Processes {
     }
 }
 
+#[derive(Clone, Copy)]
 pub(crate) enum ProcessStatus {
     Ok,
+    Errors {
+        error_count: u64,
+    }
+}
+
+pub(crate) enum ProcessType {
+    TscWatch,
+    Unknown,
 }
 
 pub(crate) struct Process {
     pub(crate) name: String,
-    pub(crate) status: ProcessStatus,
+    status: Arc<Mutex<ProcessStatus>>,
     _child_process: Box<dyn portable_pty::Child>,
     terminal: Arc<Mutex<wezterm_term::Terminal>>,
     pty_master: Box<dyn portable_pty::MasterPty>,
+}
+
+impl Process {
+    pub(crate) fn status(&self) -> ProcessStatus {
+        *self.status.lock().unwrap()
+    }
 }
 
 #[allow(dead_code)]

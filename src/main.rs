@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use processes::{ProcessStatus};
+use processes::ProcessStatus;
 use ratatui::{backend::TermwizBackend, buffer::Buffer, layout::{Constraint, Layout, Rect}, style::{Color, Style, Stylize}, text::{Line, Text}, widgets::{Block, List, ListItem, ListState, Widget}, Frame};
 use termwiz::{caps::ProbeHints, input::{InputEvent, KeyEvent}, surface::{Change, Surface}, terminal::{buffered::BufferedTerminal, SystemTerminal, Terminal}};
 use wezterm_term::{CellAttributes, KeyCode, KeyModifiers};
@@ -154,10 +154,14 @@ fn process_list_labels(processes: & Processes) -> impl Iterator<Item=ListItem> {
                 style
             ));
 
-            let (status_str, status_color) = match process.status {
+            let (status_str, status_color) = match process.status() {
                 ProcessStatus::Ok => {
-                    ("OK", Color::Green)
+                    ("OK".to_owned(), Color::Green)
                 },
+                // TODO: limit error count
+                ProcessStatus::Errors { error_count } => {
+                    (format!("{error_count} Errors"), Color::Red)
+                }
             };
             let status_style = Style::default()
                 .fg(status_color)

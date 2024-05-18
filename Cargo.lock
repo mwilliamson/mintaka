@@ -1001,6 +1001,7 @@ dependencies = [
  "clap",
  "portable-pty",
  "ratatui",
+ "regex",
  "serde",
  "termwiz",
  "toml",
