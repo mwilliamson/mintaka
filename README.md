@@ -41,6 +41,7 @@ command = ["npm", "run", "cosmos"]
 [[processes]]
 name = "Build"
 command = ["npm", "run", "build-watch"]
+error_regex = "Build finished with ([0-9]+) errors"
 
 [[processes]]
 name = "tsc"
