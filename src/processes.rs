@@ -5,7 +5,7 @@ use portable_pty::{ChildKiller, ExitStatus, PtyPair, PtySize, PtySystem};
 use termwiz::{escape::{parser::Parser, Esc, EscCode}, terminal::TerminalWaker};
 use wezterm_term::{TerminalSize, VisibleRowIndex};
 
-use crate::{config::ProcessConfig, process_types::{self, ProcessType}};
+use crate::{config::ProcessConfig, process_statuses::ProcessStatusAnalyzer};
 
 type SharedPtySystem = Arc<Box<dyn PtySystem + Send>>;
 
@@ -324,7 +324,7 @@ impl ProcessInstance {
         let child_process_reader = pty_pair.master.try_clone_reader().unwrap();
         Self::spawn_process_reader(
             process_name.clone(),
-            process_config.process_type(),
+            process_config.process_status_analyzer(),
             child_process,
             child_process_reader,
             Arc::clone(&process_status),
@@ -368,7 +368,7 @@ impl ProcessInstance {
 
     fn spawn_process_reader(
         process_name: String,
-        process_type: ProcessType,
+        process_status_analyzer: ProcessStatusAnalyzer,
         mut child_process: Box<dyn portable_pty::Child>,
         mut reader: Box<dyn std::io::Read + Send>,
         process_status: Arc<Mutex<ProcessStatus>>,
@@ -417,7 +417,7 @@ impl ProcessInstance {
                             termwiz::escape::ControlCode::CarriageReturn
                         ) |
                         termwiz::escape::Action::Esc(Esc::Code(EscCode::FullReset)) => {
-                            if let Some(new_status) = process_types::status(&process_type, &last_line) {
+                            if let Some(new_status) = process_status_analyzer.analyze_line(&last_line) {
                                 let mut process_status_locked = process_status.lock().unwrap();
                                 *process_status_locked = new_status;
 

@@ -3,7 +3,7 @@ use std::{fs::OpenOptions, io::Read, path::Path};
 use regex::Regex;
 use serde::Deserialize;
 
-use crate::process_types::ProcessType;
+use crate::process_statuses::ProcessStatusAnalyzer;
 
 #[derive(Deserialize)]
 pub(crate) struct MintakaConfig {
@@ -29,13 +29,16 @@ pub(crate) struct ProcessConfig {
 }
 
 impl ProcessConfig {
-    pub(crate) fn process_type(&self) -> ProcessType {
+    pub(crate) fn process_status_analyzer(&self) -> ProcessStatusAnalyzer {
         match self.process_type.as_ref() {
-            None => ProcessType::Unknown {
+            None => ProcessStatusAnalyzer {
                 success_regex: self.success_regex.as_ref().map(|regex| Regex::new(regex).unwrap()),
                 error_regex: self.error_regex.as_ref().map(|regex| Regex::new(regex).unwrap()),
             },
-            Some(process_type) => process_type.to_process_type()
+            Some(process_type) => ProcessStatusAnalyzer {
+                success_regex: process_type.success_regex(),
+                error_regex: process_type.error_regex(),
+            }
         }
     }
 
@@ -54,11 +57,17 @@ enum ProcessTypeConfig {
 }
 
 impl ProcessTypeConfig {
-    fn to_process_type(&self) -> ProcessType {
-        match self {
-            ProcessTypeConfig::TscWatch => ProcessType::TscWatch,
-        }
+    fn success_regex(&self) -> Option<Regex> {
+        None
     }
+
+    fn error_regex(&self) -> Option<Regex> {
+        Some(TSC_WATCH_ERROR_REGEX.clone())
+    }
+}
+
+lazy_static::lazy_static! {
+    static ref TSC_WATCH_ERROR_REGEX: Regex = Regex::new(" Found ([0-9]+) error[s]?\\. Watching for file changes\\.").unwrap();
 }
 
 #[allow(dead_code)]

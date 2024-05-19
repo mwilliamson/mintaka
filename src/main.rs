@@ -10,7 +10,7 @@ use crate::processes::Processes;
 mod cli;
 mod config;
 mod processes;
-mod process_types;
+mod process_statuses;
 mod ui;
 
 fn main() {
