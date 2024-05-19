@@ -23,11 +23,14 @@ jobs:
     - run: |
         cargo build --release \
           --target x86_64-unknown-linux-musl \
-          --target x86_64-pc-windows-gnu
-        du -h target
+          --target x86_64-pc-windows-gnu \
+          --target x86_64-apple-darwin \
+          --target aarch64-apple-darwin
 
     - uses: actions/upload-artifact@v4
       with:
         path: |
           target/x86_64-pc-windows-gnu/release/mintaka.exe
           target/x86_64-unknown-linux-musl/release/mintaka
+          target/x86_64-apple-darwin/release/mintaka
+          target/aarch64-apple-darwin/release/mintaka
