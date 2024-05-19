@@ -135,10 +135,18 @@ impl Processes {
     }
 
     pub(crate) fn resize(&mut self, size: (usize, usize)) {
-        self.pty_size.cols = size.0 as u16;
-        self.pty_size.rows = size.1 as u16;
-        for process in &mut self.processes {
-            process.resize(self.pty_size);
+        let pty_size = PtySize {
+            cols: size.0 as u16,
+            rows: size.1 as u16,
+            ..self.pty_size
+        };
+
+        if self.pty_size != pty_size {
+            self.pty_size = pty_size;
+
+            for process in &mut self.processes {
+                process.resize(self.pty_size);
+            }
         }
     }
 
