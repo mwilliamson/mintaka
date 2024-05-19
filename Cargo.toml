@@ -3,6 +3,9 @@ name = "mintaka"
 version = "0.1.0"
 edition = "2021"
 
+[profile.release]
+lto = true
+
 [dependencies]
 clap = { version = "4.5.4", features = ["derive"] }
 lazy_static = "1.4.0"
