@@ -56,9 +56,54 @@ after = "tsc"
 Note that Mintaka is still under early development: there are likely bugs,
 performance is probably quite poor, and the config file format might change.
 
+## Configuration
+
+Mintaka is configured using a TOML file that should have a `processes` array,
+with each process having the keys:
+
+* `command`: An array of strings describing how to start the process.
+
+* `name`: Optionally, a string that is used to describe the process. If not set,
+  a name will be automatically generated from the command.
+
+* `after`: Optionally, the name of another process. Whenever that other process
+  reaches a successful state, this process will be restarted. If `after` is set,
+  the process will not be automatically started when Mintaka starts.
+
+* `autostart`: Optionally, whether process should be automatically started when
+  Mintaka starts. If not set, this defaults to `true` unless `after` is set.
+
+* `type`: Optionally, the type of process that is running. This determines how
+  Mintaka detects the current status of a running process.
+
+  Currently only `tsc-watch` is supported, which handles `tsc --watch` commands.
+
+## Statuses
+
+A process can have the following statuses:
+
+* Inactive: the process has not started.
+
+* Running: the process is running and has not yet reached a success or error
+  state. For instance, `tsc --watch` will be in this state during compilation.
+
+* Success: the process is running and has reached a success state. For instance,
+  `tsc --watch` will be in this state if the last printed line was
+  `Found 0 errors. Watching for file changes.`.
+
+* Error: the process is running and has reached a success state. For instance,
+  `tsc --watch` will be in this state if the last printed line was
+  `Found 2 errors. Watching for file changes.`.
+
+* Exited: the process has exited.
+
+For the purposes of starting other processes, the successful statuses are
+"Success" and "Exited" when the exit code is 0.
+
 ## Keyboard shortcuts
 
-* Press `a` to toggle autofocus.
+* Press `a` to toggle autofocus. When autofocus is on, the first process with
+  an error will be focused automatically.
 * Press `r` to restart the focused process.
 * Use the up and down arrow keys to focus on the previous and next process
   respectively.
