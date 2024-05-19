@@ -1,5 +1,6 @@
 use std::{fs::OpenOptions, io::Read, path::Path};
 
+use regex::Regex;
 use serde::Deserialize;
 
 use crate::process_types::ProcessType;
@@ -21,14 +22,21 @@ pub(crate) struct ProcessConfig {
     pub(crate) after: Option<String>,
 
     autostart: Option<bool>,
+
+    success_regex: Option<String>,
+
+    error_regex: Option<String>,
 }
 
 impl ProcessConfig {
     pub(crate) fn process_type(&self) -> ProcessType {
-        self.process_type.as_ref().map_or(
-            ProcessType::Unknown,
-            |process_type| process_type.to_process_type()
-        )
+        match self.process_type.as_ref() {
+            None => ProcessType::Unknown {
+                success_regex: self.success_regex.as_ref().map(|regex| Regex::new(regex).unwrap()),
+                error_regex: self.error_regex.as_ref().map(|regex| Regex::new(regex).unwrap()),
+            },
+            Some(process_type) => process_type.to_process_type()
+        }
     }
 
     pub(crate) fn autostart(&self) -> bool {

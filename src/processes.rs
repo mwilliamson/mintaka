@@ -168,7 +168,7 @@ pub(crate) enum ProcessStatus {
 
     /// The process is running and has reached an error state.
     Errors {
-        error_count: u64,
+        error_count: Option<u64>,
     },
 
     /// The process has exited.

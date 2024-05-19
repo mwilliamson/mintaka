@@ -118,12 +118,18 @@ fn process_list_labels(processes: & Processes) -> impl Iterator<Item=ListItem> {
                     "SUCCESS".to_owned()
                 }
                 ProcessStatus::Errors { error_count } => {
-                    let error_count_str = if error_count >= 100 {
-                        "99+".to_owned()
-                    } else {
-                        format!("{error_count}")
-                    };
-                    format!("ERR ({error_count_str})")
+                    let mut status_str = "ERR".to_owned();
+
+                    if let Some(error_count) = error_count {
+                        let error_count_str = if error_count >= 100 {
+                            "99+".to_owned()
+                        } else {
+                            format!("{error_count}")
+                        };
+                        status_str.push_str(&format!(" ({error_count_str})"));
+                    }
+
+                    status_str
                 },
                 ProcessStatus::Exited { exit_code } => {
                     format!("EXIT {exit_code}")

@@ -6,7 +6,20 @@ command = ["echo", "one", "two", "three"]
 
 [[processes]]
 name = "Print and sleep"
-command  = ["bash", "-c", "while :; do date; sleep 1; done"]
+command  = ["bash", "-c", "while :; do sleep 2; echo 'Compilation successful'; sleep 2; echo 'Compilation failed'; done"]
+success_regex = "Compilation successful"
+error_regex = "Compilation failed"
+
+[[processes]]
+name = "Success or error"
+command  = ["bash", "-c", "error_count=0; while :; do sleep 2; echo 'Compilation successful'; sleep 2; ((error_count++)); echo $error_count errors; done"]
+success_regex = "Compilation successful"
+error_regex = "([0-9]+) errors"
+
+[[processes]]
+name = "Error count"
+command  = ["bash", "-c", "error_count=0; while :; do sleep 2; echo '0 errors'; sleep 2; ((error_count++)); echo $error_count errors; done"]
+error_regex = "([0-9]+) errors"
 
 [[processes]]
 name = "No autostart"

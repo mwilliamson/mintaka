@@ -17,7 +17,7 @@ pub(super) fn status(last_line: &str) -> Option<ProcessStatus> {
                 if error_count == 0 {
                     Some(ProcessStatus::Success)
                 } else {
-                    Some(ProcessStatus::Errors { error_count })
+                    Some(ProcessStatus::Errors { error_count: Some(error_count) })
                 }
             }
         }
