@@ -1,4 +1,4 @@
-# Mintaka: Run long-running process, automatically focus on problems
+# Mintaka: Run long-running processes, automatically focus on problems
 
 Mintaka runs long-running processes, and automatically focuses on problems in
 any of those processes.
