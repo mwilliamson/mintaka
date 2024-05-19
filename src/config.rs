@@ -19,6 +19,8 @@ pub(crate) struct ProcessConfig {
     process_type: Option<ProcessTypeConfig>,
 
     pub(crate) after: Option<String>,
+
+    autostart: Option<bool>,
 }
 
 impl ProcessConfig {
@@ -27,6 +29,13 @@ impl ProcessConfig {
             ProcessType::Unknown,
             |process_type| process_type.to_process_type()
         )
+    }
+
+    pub(crate) fn autostart(&self) -> bool {
+        match self.autostart {
+            None => self.after.is_none(),
+            Some(autostart) => autostart,
+        }
     }
 }
 

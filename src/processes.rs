@@ -204,7 +204,7 @@ impl Process {
         let name = process_config.name.clone()
             .unwrap_or_else(|| process_config.command.join(" "));
 
-        let pending_restart = process_config.after.is_none();
+        let pending_restart = process_config.autostart();
 
         Self {
             name,

@@ -7,3 +7,8 @@ command = ["echo", "one", "two", "three"]
 [[processes]]
 name = "Print and sleep"
 command  = ["bash", "-c", "while :; do date; sleep 1; done"]
+
+[[processes]]
+name = "No autostart"
+command  = ["bash", "-c", "while :; do date; sleep 1; done"]
+autostart = false
