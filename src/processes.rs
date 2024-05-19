@@ -263,6 +263,7 @@ impl Process {
     }
 
     fn resize(&mut self, pty_size: PtySize) {
+        self.pty_size = pty_size;
         if let Some(instance) = &mut self.instance {
             instance.resize(pty_size);
         }
