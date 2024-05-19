@@ -1,7 +1,7 @@
-# Mintaka: Run long-running processes, automatically focus on problems
+# Mintaka: Run long-running processes in parallel, automatically focus on problems
 
-Mintaka runs long-running processes, and automatically focuses on problems in
-any of those processes.
+Mintaka runs long-running processes in parallel, and automatically focuses on
+problems in any of those processes.
 
 For instance, while you're developing a web application, suppose you want to run
 several processes at once using tmux:
