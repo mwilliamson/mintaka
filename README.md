@@ -74,9 +74,24 @@ with each process having the keys:
   Mintaka starts. If not set, this defaults to `true` unless `after` is set.
 
 * `type`: Optionally, the type of process that is running. This determines how
-  Mintaka detects the current status of a running process.
+  Mintaka detects the current status of a running process for common
+  executables.
 
   Currently only `tsc-watch` is supported, which handles `tsc --watch` commands.
+
+* `error_regex`: Optionally, a regex that can be applied to each line of the
+  output of a process to determine its status. When the regex matches:
+
+  * If the regex has no capture groups, the process will have a status of
+    "Error".
+
+  * If the regex has at least one capture group, the first capture group will be
+    used as the error count. If the error count is zero, the process will have a
+    status of "Success", otherwise the process will have a status of "Error".
+
+* `success_regex`: Optionally, a regex that can be applied to each line of the
+  output of a process to determine its status. If it matches, the process will
+  have a status of "Success".
 
 ## Statuses
 
