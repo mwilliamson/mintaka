@@ -384,6 +384,11 @@ impl ProcessInstance {
                     let mut process_status_locked = process_status.lock().unwrap();
                     *process_status_locked = ProcessStatus::Exited { exit_code: exit_code.exit_code() };
 
+                    if exit_code.success() {
+                        let mut success_notifications_locked = success_notifications.lock().unwrap();
+                        success_notifications_locked.insert(process_name.clone());
+                    }
+
                     on_change.wake().unwrap();
 
                     break;
