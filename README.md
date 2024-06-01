@@ -123,4 +123,4 @@ For the purposes of starting other processes, the successful statuses are
 * Press `r` to restart the focused process.
 * Use the up and down arrow keys to focus on the previous and next process
   respectively.
-* Press `q` or `Ctrl+c` to quit.
+* Press `Ctrl+c` to quit.

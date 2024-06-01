@@ -51,7 +51,6 @@ fn main() {
                 if let InputEvent::Key(key_event) = input {
                     if matches!(
                         key_event,
-                        KeyEvent { key: KeyCode::Char('q'), .. } |
                         KeyEvent { key: KeyCode::Char('c'), modifiers: KeyModifiers::CTRL}
                     ) {
                         return;
