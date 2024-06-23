@@ -25,3 +25,9 @@ error_regex = "([0-9]+) errors"
 name = "No autostart"
 command  = ["bash", "-c", "while :; do date; sleep 1; done"]
 autostart = false
+
+[[processes]]
+name = "After"
+command  = ["bash", "-c", "sleep 1"]
+autostart = false
+after = "Success or error"
