@@ -24,7 +24,9 @@ pub(crate) struct Processes {
 
     after: MultiMap<String, usize>,
 
-    success_notifications: Arc<Mutex<HashSet<String>>>,
+    success_notification_rx: std::sync::mpsc::Receiver<String>,
+
+    success_notification_tx: std::sync::mpsc::Sender<String>,
 }
 
 impl Processes {
@@ -37,6 +39,8 @@ impl Processes {
             pixel_height: 0,
         };
 
+        let (success_notification_tx, success_notification_rx) = std::sync::mpsc::channel();
+
         Self {
             autofocus: true,
             pty_system,
@@ -45,7 +49,8 @@ impl Processes {
             focused_process_index: 0,
             on_change,
             after: MultiMap::new(),
-            success_notifications: Arc::new(Mutex::new(HashSet::new())),
+            success_notification_rx,
+            success_notification_tx,
         }
     }
 
@@ -74,7 +79,7 @@ impl Processes {
             Arc::clone(&self.pty_system),
             self.pty_size,
             self.on_change.clone(),
-            Arc::clone(&self.success_notifications),
+            self.success_notification_tx.clone(),
         );
 
         process.do_work()?;
@@ -85,9 +90,7 @@ impl Processes {
     }
 
     pub(crate) fn do_work(&mut self) -> Result<(), ProcessError> {
-        let mut success_notifications_locked = self.success_notifications.lock().unwrap();
-
-        for process_name in success_notifications_locked.drain() {
+        for process_name in self.drain_successfully_started_processes() {
             if let Some(process_indexes) = self.after.get_vec_mut(&process_name) {
                 for process_index in process_indexes {
                     self.processes[*process_index].restart()
@@ -108,6 +111,16 @@ impl Processes {
         }
 
         Ok(())
+    }
+
+    fn drain_successfully_started_processes(&mut self) -> HashSet<String> {
+        let mut process_names = HashSet::new();
+
+        while let Ok(process_name) = self.success_notification_rx.try_recv() {
+            let _ = process_names.insert(process_name);
+        }
+
+        process_names
     }
 
     pub(crate) fn processes(&self) -> &[Process] {
@@ -198,7 +211,7 @@ pub(crate) struct Process {
     instance: Option<ProcessInstance>,
     pending_restart: bool,
     on_change: TerminalWaker,
-    success_notifications: Arc<Mutex<HashSet<String>>>,
+    success_notification_tx: std::sync::mpsc::Sender<String>,
 }
 
 impl Process {
@@ -207,7 +220,7 @@ impl Process {
         pty_system: SharedPtySystem,
         pty_size: PtySize,
         on_change: TerminalWaker,
-        success_notifications: Arc<Mutex<HashSet<String>>>,
+        success_notification_tx: std::sync::mpsc::Sender<String>,
     ) -> Self {
         let name = process_config.name.clone()
             .unwrap_or_else(|| process_config.command.join(" "));
@@ -222,7 +235,7 @@ impl Process {
             instance: None,
             pending_restart,
             on_change,
-            success_notifications,
+            success_notification_tx,
         }
     }
 
@@ -235,7 +248,7 @@ impl Process {
             &self.process_config,
             pty_pair,
             self.on_change.clone(),
-            Arc::clone(&self.success_notifications),
+            self.success_notification_tx.clone(),
         )?;
 
         self.instance = Some(instance);
@@ -305,7 +318,7 @@ impl ProcessInstance {
         process_config: &ProcessConfig,
         pty_pair: PtyPair,
         on_change: TerminalWaker,
-        success_notifications: Arc<Mutex<HashSet<String>>>,
+        success_notification_tx: std::sync::mpsc::Sender<String>,
     ) -> Result<Self, ProcessError> {
         let process_name = process_config.name.clone()
             .unwrap_or_else(|| process_config.command.join(" "));
@@ -330,7 +343,7 @@ impl ProcessInstance {
             Arc::clone(&process_status),
             Arc::clone(&terminal),
             on_change,
-            success_notifications,
+            success_notification_tx,
         );
 
         Ok(Self {
@@ -374,7 +387,7 @@ impl ProcessInstance {
         process_status: Arc<Mutex<ProcessStatus>>,
         terminal: Arc<Mutex<wezterm_term::Terminal>>,
         on_change: TerminalWaker,
-        success_notifications: Arc<Mutex<HashSet<String>>>,
+        success_notification_tx: std::sync::mpsc::Sender<String>,
     ) {
         std::thread::spawn(move || {
             let mut bytes = vec![0; 256];
@@ -394,8 +407,7 @@ impl ProcessInstance {
                     *process_status_locked = ProcessStatus::Exited { exit_code: exit_code.exit_code() };
 
                     if exit_code.success() {
-                        let mut success_notifications_locked = success_notifications.lock().unwrap();
-                        success_notifications_locked.insert(process_name.clone());
+                        let _ = success_notification_tx.send(process_name.clone());
                     }
 
                     on_change.wake().unwrap();
@@ -422,8 +434,7 @@ impl ProcessInstance {
                                 *process_status_locked = new_status;
 
                                 if matches!(new_status, ProcessStatus::Success) {
-                                    let mut success_notifications_locked = success_notifications.lock().unwrap();
-                                    success_notifications_locked.insert(process_name.clone());
+                                    let _ = success_notification_tx.send(process_name.clone());
                                 }
                             }
 
