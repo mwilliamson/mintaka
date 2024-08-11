@@ -329,8 +329,12 @@ impl ProcessInstance {
         let child_process_killer = child_process.clone_killer();
         std::mem::drop(pty_pair.slave);
 
+        let pty_size = pty_pair.master.get_size().unwrap();
         let child_process_writer = pty_pair.master.take_writer().unwrap();
-        let terminal = Arc::new(Mutex::new(Self::create_process_terminal(child_process_writer)));
+        let terminal = Arc::new(Mutex::new(Self::create_process_terminal(
+            child_process_writer,
+            pty_size,
+        )));
 
         let process_status = Arc::new(Mutex::new(ProcessStatus::Running));
 
@@ -367,8 +371,14 @@ impl ProcessInstance {
         Ok(pty_command)
     }
 
-    fn create_process_terminal(writer: Box<dyn std::io::Write + Send>) -> wezterm_term::Terminal {
-        let terminal_size = wezterm_term::TerminalSize::default();
+    fn create_process_terminal(writer: Box<dyn std::io::Write + Send>, size: PtySize) -> wezterm_term::Terminal {
+        let terminal_size = wezterm_term::TerminalSize {
+            rows: size.rows.into(),
+            cols: size.cols.into(),
+            pixel_width: size.pixel_width.into(),
+            pixel_height: size.pixel_height.into(),
+            ..Default::default()
+        };
         let terminal_config = Arc::new(ProcessTerminal);
         wezterm_term::Terminal::new(
             terminal_size,
