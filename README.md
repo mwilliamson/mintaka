@@ -64,6 +64,9 @@ with each process having the keys:
 
 * `command`: An array of strings describing how to start the process.
 
+* `working_directory`: Optionally, the working directory that the process should
+  initially have.
+
 * `name`: Optionally, a string that is used to describe the process. If not set,
   a name will be automatically generated from the command.
 

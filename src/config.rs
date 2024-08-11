@@ -1,4 +1,4 @@
-use std::{fs::OpenOptions, io::Read, path::Path};
+use std::{fs::OpenOptions, io::Read, path::{Path, PathBuf}};
 
 use regex::Regex;
 use serde::Deserialize;
@@ -13,6 +13,8 @@ pub(crate) struct MintakaConfig {
 #[derive(Clone, Deserialize)]
 pub(crate) struct ProcessConfig {
     pub(crate) command: Vec<String>,
+
+    pub(crate) working_directory: Option<PathBuf>,
 
     pub(crate) name: Option<String>,
 

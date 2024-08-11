@@ -366,7 +366,11 @@ impl ProcessInstance {
         pty_command.args(process_config.command.iter().skip(1));
 
         let current_dir = std::env::current_dir().map_err(ProcessError::GetCurrentDirFailed)?;
-        pty_command.cwd(current_dir);
+        let working_directory = match &process_config.working_directory {
+            Some(relative_working_directory) => current_dir.join(relative_working_directory),
+            None => current_dir,
+        };
+        pty_command.cwd(working_directory);
 
         Ok(pty_command)
     }

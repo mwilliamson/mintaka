@@ -31,3 +31,8 @@ name = "After"
 command  = ["bash", "-c", "sleep 1"]
 autostart = false
 after = "Success or error"
+
+[[processes]]
+name = "Working directory"
+command = ["pwd"]
+working_directory = "src"
