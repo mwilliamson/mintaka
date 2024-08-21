@@ -27,10 +27,15 @@ jobs:
           --target x86_64-apple-darwin \
           --target aarch64-apple-darwin
 
+    - run: |
+        mkdir -p dist
+        version=$(cargo metadata --format-version=1 --no-deps | jq '.packages[0].version' --raw-output)
+        zip --junk-paths dist/mintaka-$version-x86_64-pc-windows-gnu.zip  target/x86_64-pc-windows-gnu/release/mintaka.exe
+        gzip --stdout target/x86_64-unknown-linux-musl/release/mintaka > dist/mintaka-$version-x86_64-unknown-linux-musl.gz
+        gzip --stdout target/x86_64-apple-darwin/release/mintaka > dist/mintaka-$version-x86_64-apple-darwin.gz
+        gzip --stdout target/aarch64-apple-darwin/release/mintaka > dist/mintaka-$version-aarch64-apple-darwin.gz
+
+
     - uses: actions/upload-artifact@v4
       with:
-        path: |
-          target/x86_64-pc-windows-gnu/release/mintaka.exe
-          target/x86_64-unknown-linux-musl/release/mintaka
-          target/x86_64-apple-darwin/release/mintaka
-          target/aarch64-apple-darwin/release/mintaka
+        path: dist
