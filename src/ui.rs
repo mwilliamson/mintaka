@@ -81,6 +81,10 @@ fn render_process_list(processes: &Processes, area: Rect, frame: &mut Frame) {
     frame.render_stateful_widget(&process_list, area, &mut process_list_state);
 }
 
+const STATUS_COLOR_SUCCESS: Color = Color::Green;
+const STATUS_COLOR_OTHER: Color = Color::DarkGray;
+const STATUS_COLOR_FAILED: Color = Color::Red;
+
 fn process_list_labels(processes: & Processes) -> impl Iterator<Item=ListItem> {
     let normal_style = Style::default().fg(Color::Black).bg(Color::White);
     let focused_style = Style::default().fg(Color::White).bg(Color::Black);
@@ -101,24 +105,18 @@ fn process_list_labels(processes: & Processes) -> impl Iterator<Item=ListItem> {
                 style
             ));
 
-            let status = process.status();
-            let status_color = if status.is_ok() {
-                Color::Green
-            } else {
-                Color::Red
-            };
-            let status_str = match process.status() {
+            let (status_str, status_color) = match process.status() {
                 ProcessStatus::NotStarted => {
-                    "INACTIVE".to_owned()
+                    ("INACTIVE".to_owned(), STATUS_COLOR_OTHER)
                 },
                 ProcessStatus::WaitingForUpstream => {
-                    "WAITING".to_owned()
+                    ("WAITING".to_owned(), STATUS_COLOR_OTHER)
                 },
                 ProcessStatus::Running => {
-                    "RUNNING".to_owned()
+                    ("RUNNING".to_owned(), STATUS_COLOR_OTHER)
                 },
                 ProcessStatus::Success => {
-                    "SUCCESS".to_owned()
+                    ("SUCCESS".to_owned(), STATUS_COLOR_SUCCESS)
                 }
                 ProcessStatus::Errors { error_count } => {
                     let mut status_str = "ERR".to_owned();
@@ -132,10 +130,15 @@ fn process_list_labels(processes: & Processes) -> impl Iterator<Item=ListItem> {
                         status_str.push_str(&format!(" ({error_count_str})"));
                     }
 
-                    status_str
+                    (status_str, STATUS_COLOR_FAILED)
                 },
                 ProcessStatus::Exited { exit_code } => {
-                    format!("EXIT {exit_code}")
+                    let status_color = if exit_code == 0 {
+                        STATUS_COLOR_SUCCESS
+                    } else {
+                        STATUS_COLOR_FAILED
+                    };
+                    (format!("EXIT {exit_code}"), status_color)
                 }
             };
             let status_style = Style::default()

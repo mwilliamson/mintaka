@@ -90,7 +90,7 @@ impl Processes {
         if self.autofocus {
             self.focused_process_index = self.processes.iter()
                 .enumerate()
-                .find(|(_process_index, process)| !process.status().is_ok())
+                .find(|(_process_index, process)| process.status().is_failure())
                 .map(|(process_index, _process)| process_index)
                 .unwrap_or(self.focused_process_index);
         }
@@ -194,18 +194,18 @@ pub(crate) enum ProcessStatus {
 }
 
 impl ProcessStatus {
-    pub(crate) fn is_ok(&self) -> bool {
+    fn is_failure(&self) -> bool {
         match self {
-            ProcessStatus::NotStarted => true,
-            ProcessStatus::WaitingForUpstream => true,
-            ProcessStatus::Running => true,
-            ProcessStatus::Success => true,
-            ProcessStatus::Errors { .. } => false,
-            ProcessStatus::Exited { exit_code } => *exit_code == 0,
+            ProcessStatus::NotStarted => false,
+            ProcessStatus::WaitingForUpstream => false,
+            ProcessStatus::Running => false,
+            ProcessStatus::Success => false,
+            ProcessStatus::Errors { .. } => true,
+            ProcessStatus::Exited { exit_code } => *exit_code != 0,
         }
     }
 
-    pub(crate) fn is_success(&self) -> bool {
+    fn is_success(&self) -> bool {
         match self {
             ProcessStatus::NotStarted => false,
             ProcessStatus::WaitingForUpstream => false,
