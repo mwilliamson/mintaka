@@ -1,4 +1,4 @@
-use std::{collections::HashSet, sync::{Arc, Mutex}};
+use std::sync::{Arc, Mutex};
 
 use multimap::MultiMap;
 use portable_pty::{ChildKiller, ExitStatus, PtyPair, PtySize, PtySystem};
@@ -23,10 +23,6 @@ pub(crate) struct Processes {
     on_change: TerminalWaker,
 
     after: MultiMap<String, usize>,
-
-    status_notification_rx: std::sync::mpsc::Receiver<StatusNotification>,
-
-    status_notification_tx: std::sync::mpsc::Sender<StatusNotification>,
 }
 
 impl Processes {
@@ -39,8 +35,6 @@ impl Processes {
             pixel_height: 0,
         };
 
-        let (status_notification_tx, status_notification_rx) = std::sync::mpsc::channel();
-
         Self {
             autofocus: true,
             pty_system,
@@ -49,8 +43,6 @@ impl Processes {
             focused_process_index: 0,
             on_change,
             after: MultiMap::new(),
-            status_notification_rx,
-            status_notification_tx,
         }
     }
 
@@ -79,7 +71,6 @@ impl Processes {
             Arc::clone(&self.pty_system),
             self.pty_size,
             self.on_change.clone(),
-            self.status_notification_tx.clone(),
         );
 
         process.do_work()?;
@@ -90,13 +81,7 @@ impl Processes {
     }
 
     pub(crate) fn do_work(&mut self) -> Result<(), ProcessError> {
-        for process_name in self.drain_successfully_run_processes() {
-            if let Some(process_indexes) = self.after.get_vec_mut(&process_name) {
-                for process_index in process_indexes {
-                    self.processes[*process_index].restart()
-                }
-            }
-        }
+        self.handle_status_updates();
 
         for process in &mut self.processes {
             process.do_work()?;
@@ -113,16 +98,29 @@ impl Processes {
         Ok(())
     }
 
-    fn drain_successfully_run_processes(&mut self) -> HashSet<String> {
-        let mut process_names = HashSet::new();
+    fn handle_status_updates(&mut self) {
+        let mut new_statuses = Vec::new();
 
-        while let Ok(status_notification) = self.status_notification_rx.try_recv() {
-            if status_notification.new_status.is_success() {
-                let _ = process_names.insert(status_notification.process_name);
+        for process in &mut self.processes {
+            let new_status = process.handle_status_updates();
+            if let Some(new_status) = new_status {
+                new_statuses.push((process.name().to_string(), new_status));
             }
         }
 
-        process_names
+        for (before_process_name, before_new_status) in new_statuses {
+            if let Some(after_process_indexes) = self.after.get_vec_mut(&before_process_name) {
+                if before_new_status.is_success() {
+                    for process_index in after_process_indexes {
+                        self.processes[*process_index].restart()
+                    }
+                } else {
+                    for process_index in after_process_indexes {
+                        self.processes[*process_index].mark_waiting_for_upstream()
+                    }
+                }
+            }
+        }
     }
 
     pub(crate) fn processes(&self) -> &[Process] {
@@ -175,8 +173,8 @@ pub(crate) enum ProcessStatus {
     /// The process has not been started.
     NotStarted,
 
-    /// The process will run once another process reaches a success state.
-    Pending,
+    /// The process will run once an upstream process reaches a success state.
+    WaitingForUpstream,
 
     /// The process is running and has not reached a success or error state.
     Running,
@@ -199,7 +197,7 @@ impl ProcessStatus {
     pub(crate) fn is_ok(&self) -> bool {
         match self {
             ProcessStatus::NotStarted => true,
-            ProcessStatus::Pending => true,
+            ProcessStatus::WaitingForUpstream => true,
             ProcessStatus::Running => true,
             ProcessStatus::Success => true,
             ProcessStatus::Errors { .. } => false,
@@ -210,7 +208,7 @@ impl ProcessStatus {
     pub(crate) fn is_success(&self) -> bool {
         match self {
             ProcessStatus::NotStarted => false,
-            ProcessStatus::Pending => false,
+            ProcessStatus::WaitingForUpstream => false,
             ProcessStatus::Running => false,
             ProcessStatus::Success => true,
             ProcessStatus::Errors { .. } => false,
@@ -219,16 +217,33 @@ impl ProcessStatus {
     }
 }
 
+enum ProcessInstanceState {
+    /// This process has not yet been triggered.
+    NotStarted,
+
+    /// This process will be triggered once an upstream process reaches a
+    /// success state.
+    WaitingForUpstream,
+
+    /// This process should be restarted.
+    PendingRestart,
+
+    /// This process has a running instance.
+    Running {
+        instance: ProcessInstance,
+        status: ProcessStatus,
+        status_rx: std::sync::mpsc::Receiver<ProcessStatus>,
+    },
+}
+
 pub(crate) struct Process {
     name: String,
     process_config: ProcessConfig,
     // TODO: bundle up pty_system and pty_size?
     pty_system: SharedPtySystem,
     pty_size: PtySize,
-    instance: Option<ProcessInstance>,
-    pending_restart: bool,
+    instance_state: ProcessInstanceState,
     on_change: TerminalWaker,
-    status_notification_tx: std::sync::mpsc::Sender<StatusNotification>,
 }
 
 impl Process {
@@ -237,22 +252,23 @@ impl Process {
         pty_system: SharedPtySystem,
         pty_size: PtySize,
         on_change: TerminalWaker,
-        status_notification_tx: std::sync::mpsc::Sender<StatusNotification>,
     ) -> Self {
         let name = process_config.name.clone()
             .unwrap_or_else(|| process_config.command.join(" "));
 
-        let pending_restart = process_config.autostart();
+        let instance_state = if process_config.autostart() {
+            ProcessInstanceState::PendingRestart
+        } else {
+            ProcessInstanceState::NotStarted
+        };
 
         Self {
             name,
             process_config,
             pty_system,
             pty_size,
-            instance: None,
-            pending_restart,
+            instance_state,
             on_change,
-            status_notification_tx,
         }
     }
 
@@ -261,14 +277,20 @@ impl Process {
     ) -> Result<(), ProcessError> {
         let pty_pair = self.pty_system.openpty(self.pty_size).unwrap();
 
+        let (status_tx, status_rx) = std::sync::mpsc::channel();
+
         let instance = ProcessInstance::start(
             &self.process_config,
             pty_pair,
             self.on_change.clone(),
-            self.status_notification_tx.clone(),
+            status_tx,
         )?;
 
-        self.instance = Some(instance);
+        self.instance_state = ProcessInstanceState::Running {
+            instance,
+            status: ProcessStatus::Running,
+            status_rx,
+        };
 
         Ok(())
     }
@@ -278,53 +300,76 @@ impl Process {
     }
 
     fn restart(&mut self) {
-        if let Some(instance) = &mut self.instance {
+        self.kill(ProcessInstanceState::PendingRestart);
+    }
+
+    fn mark_waiting_for_upstream(&mut self) {
+        self.kill(ProcessInstanceState::WaitingForUpstream);
+    }
+
+    fn kill(&mut self, new_process_instance_state: ProcessInstanceState) {
+        let previous_instance_state = std::mem::replace(
+            &mut self.instance_state,
+            new_process_instance_state,
+        );
+        if let ProcessInstanceState::Running { mut instance, .. } = previous_instance_state {
             instance.kill();
         }
-        self.pending_restart = true;
+    }
+
+    fn handle_status_updates(&mut self) -> Option<ProcessStatus> {
+        match &mut self.instance_state {
+            ProcessInstanceState::NotStarted
+            | ProcessInstanceState::WaitingForUpstream
+            | ProcessInstanceState::PendingRestart => None,
+            ProcessInstanceState::Running { status, status_rx, .. } => {
+                let new_status = status_rx.try_iter().last();
+
+                if let Some(new_status) = new_status {
+                    *status = new_status;
+                }
+
+                new_status
+            },
+        }
     }
 
     fn do_work(&mut self) -> Result<(), ProcessError> {
-        if self.pending_restart && self.instance_is_stopped() {
+        if matches!(self.instance_state, ProcessInstanceState::PendingRestart) {
             self.start()?;
-            self.pending_restart = false;
         }
 
         Ok(())
     }
 
-    fn instance_is_stopped(&self) -> bool {
-        match &self.instance {
-            None => true,
-            Some(instance) => instance.is_stopped()
-        }
-    }
-
     fn resize(&mut self, pty_size: PtySize) {
         self.pty_size = pty_size;
-        if let Some(instance) = &mut self.instance {
+        if let ProcessInstanceState::Running { instance, .. } = &mut self.instance_state {
             instance.resize(pty_size);
         }
     }
 
     pub(crate) fn status(&self) -> ProcessStatus {
-        match &self.instance {
-            None => ProcessStatus::NotStarted,
-            Some(instance) => instance.status(),
+        match &self.instance_state {
+            ProcessInstanceState::NotStarted => ProcessStatus::NotStarted,
+            ProcessInstanceState::WaitingForUpstream => ProcessStatus::WaitingForUpstream,
+            ProcessInstanceState::PendingRestart => ProcessStatus::Running,
+            ProcessInstanceState::Running { status, .. } => *status,
         }
 
     }
 
     fn lines(&self) -> Vec<wezterm_term::Line> {
-        match &self.instance {
-            None => Vec::new(),
-            Some(instance) => instance.lines(),
+        match &self.instance_state {
+            ProcessInstanceState::NotStarted
+            | ProcessInstanceState::WaitingForUpstream
+            | ProcessInstanceState::PendingRestart => Vec::new(),
+            ProcessInstanceState::Running { instance, .. } => instance.lines(),
         }
     }
 }
 
 pub(crate) struct ProcessInstance {
-    status: Arc<Mutex<ProcessStatus>>,
     terminal: Arc<Mutex<wezterm_term::Terminal>>,
     pty_master: Box<dyn portable_pty::MasterPty>,
     child_process_killer: Box<dyn ChildKiller + Send + Sync>,
@@ -335,11 +380,8 @@ impl ProcessInstance {
         process_config: &ProcessConfig,
         pty_pair: PtyPair,
         on_change: TerminalWaker,
-        status_notification_tx: std::sync::mpsc::Sender<StatusNotification>,
+        status_tx: std::sync::mpsc::Sender<ProcessStatus>,
     ) -> Result<Self, ProcessError> {
-        let process_name = process_config.name.clone()
-            .unwrap_or_else(|| process_config.command.join(" "));
-
         let pty_command = Self::process_config_to_pty_command(&process_config)?;
 
         let child_process = pty_pair.slave.spawn_command(pty_command).unwrap();
@@ -353,22 +395,17 @@ impl ProcessInstance {
             pty_size,
         )));
 
-        let process_status = Arc::new(Mutex::new(ProcessStatus::Running));
-
         let child_process_reader = pty_pair.master.try_clone_reader().unwrap();
         Self::spawn_process_reader(
-            process_name.clone(),
             process_config.process_status_analyzer(),
             child_process,
             child_process_reader,
-            Arc::clone(&process_status),
             Arc::clone(&terminal),
             on_change,
-            status_notification_tx,
+            status_tx,
         );
 
         Ok(Self {
-            status: process_status,
             terminal,
             pty_master: pty_pair.master,
             child_process_killer,
@@ -411,14 +448,12 @@ impl ProcessInstance {
     }
 
     fn spawn_process_reader(
-        process_name: String,
         process_status_analyzer: ProcessStatusAnalyzer,
         mut child_process: Box<dyn portable_pty::Child>,
         mut reader: Box<dyn std::io::Read + Send>,
-        process_status: Arc<Mutex<ProcessStatus>>,
         terminal: Arc<Mutex<wezterm_term::Terminal>>,
         on_change: TerminalWaker,
-        status_notification_tx: std::sync::mpsc::Sender<StatusNotification>,
+        status_tx: std::sync::mpsc::Sender<ProcessStatus>,
     ) {
         std::thread::spawn(move || {
             let mut bytes = vec![0; 256];
@@ -436,13 +471,7 @@ impl ProcessInstance {
 
                     let new_status = ProcessStatus::Exited { exit_code: exit_code.exit_code() };
 
-                    let mut process_status_locked = process_status.lock().unwrap();
-                    *process_status_locked = new_status;
-
-                    let _ = status_notification_tx.send(StatusNotification {
-                        process_name: process_name.clone(),
-                        new_status,
-                    });
+                    let _ = status_tx.send(new_status);
 
                     on_change.wake().unwrap();
 
@@ -464,15 +493,7 @@ impl ProcessInstance {
                         ) |
                         termwiz::escape::Action::Esc(Esc::Code(EscCode::FullReset)) => {
                             if let Some(new_status) = process_status_analyzer.analyze_line(&last_line) {
-                                let mut process_status_locked = process_status.lock().unwrap();
-                                *process_status_locked = new_status;
-
-                                if matches!(new_status, ProcessStatus::Success) {
-                                    let _ = status_notification_tx.send(StatusNotification {
-                                        process_name: process_name.clone(),
-                                        new_status,
-                                    });
-                                }
+                                let _ = status_tx.send(new_status);
                             }
 
                             last_line.clear();
@@ -512,14 +533,6 @@ impl ProcessInstance {
         });
     }
 
-    fn is_stopped(&self) -> bool {
-        matches!(self.status(), ProcessStatus::Exited { .. })
-    }
-
-    fn status(&self) -> ProcessStatus {
-        *self.status.lock().unwrap()
-    }
-
     fn lines(&self) -> Vec<wezterm_term::Line> {
         let terminal = self.terminal.lock().unwrap();
         terminal.screen().lines_in_phys_range(terminal.screen().phys_range(&(0..VisibleRowIndex::MAX)))
@@ -542,9 +555,4 @@ impl wezterm_term::TerminalConfiguration for ProcessTerminal {
     fn color_palette(&self) -> wezterm_term::color::ColorPalette {
         wezterm_term::color::ColorPalette::default()
     }
-}
-
-struct StatusNotification {
-    process_name: String,
-    new_status: ProcessStatus,
 }

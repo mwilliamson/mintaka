@@ -111,8 +111,8 @@ fn process_list_labels(processes: & Processes) -> impl Iterator<Item=ListItem> {
                 ProcessStatus::NotStarted => {
                     "INACTIVE".to_owned()
                 },
-                ProcessStatus::Pending => {
-                    "PENDING".to_owned()
+                ProcessStatus::WaitingForUpstream => {
+                    "WAITING".to_owned()
                 },
                 ProcessStatus::Running => {
                     "RUNNING".to_owned()
