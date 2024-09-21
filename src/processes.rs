@@ -173,6 +173,9 @@ pub(crate) enum ProcessStatus {
     /// The process has not been started.
     NotStarted,
 
+    /// The process will run once another process reaches a success state.
+    Pending,
+
     /// The process is running and has not reached a success or error state.
     Running,
 
@@ -194,6 +197,7 @@ impl ProcessStatus {
     pub(crate) fn is_ok(&self) -> bool {
         match self {
             ProcessStatus::NotStarted => true,
+            ProcessStatus::Pending => true,
             ProcessStatus::Running => true,
             ProcessStatus::Success => true,
             ProcessStatus::Errors { .. } => false,
