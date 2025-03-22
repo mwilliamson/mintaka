@@ -63,7 +63,10 @@ impl MintakaUi {
         render_ui(processes, &mut self.terminal, self.theme)
     }
 
-    pub(crate) fn poll_input(&mut self) -> Result<Option<MintakaInputEvent>, termwiz::Error> {
+    pub(crate) fn poll_input(
+        &mut self,
+        entered: bool,
+    ) -> Result<Option<MintakaInputEvent>, termwiz::Error> {
         let buffered_terminal = self.terminal.backend_mut().buffered_terminal_mut();
         let input_event = buffered_terminal.terminal().poll_input(None)?;
 
@@ -76,7 +79,7 @@ impl MintakaUi {
                 Ok(None)
             }
 
-            Some(InputEvent::Key(key_event)) => Ok(controls::read_key_event(key_event)),
+            Some(InputEvent::Key(key_event)) => Ok(controls::read_key_event(key_event, entered)),
 
             _ => Ok(None),
         }

@@ -36,3 +36,7 @@ after = "Success or error"
 name = "Working directory"
 command = ["pwd"]
 working_directory = "src"
+
+[[processes]]
+name = "bash"
+command = ["bash"]

@@ -4,6 +4,7 @@ use multimap::MultiMap;
 use portable_pty::{ChildKiller, ExitStatus, PtyPair, PtySize, PtySystem};
 use termwiz::{
     escape::{Esc, EscCode, parser::Parser},
+    input::KeyEvent,
     terminal::TerminalWaker,
 };
 use wezterm_term::{TerminalSize, VisibleRowIndex};
@@ -13,7 +14,17 @@ use crate::{config::ProcessConfig, process_statuses::ProcessStatusAnalyzer};
 type SharedPtySystem = Arc<Box<dyn PtySystem + Send>>;
 
 pub(crate) struct Processes {
-    autofocus: bool,
+    /// Whether the user has enabled autofocus. Autofocus may be suspended, for
+    /// instance while a process is entered.
+    autofocus_enabled: bool,
+
+    /// Whether the focused process has been entered. If so, any input to
+    /// Mintaka should be forwarded to the entered process, with the exception
+    /// of the input to leave the process.
+    ///
+    /// TODO: how does a user send the key sequence to leave the process to the
+    /// process?
+    entered: bool,
 
     pty_system: SharedPtySystem,
 
@@ -39,7 +50,8 @@ impl Processes {
         };
 
         Self {
-            autofocus: true,
+            autofocus_enabled: true,
+            entered: false,
             pty_system,
             pty_size,
             processes: Vec::new(),
@@ -50,15 +62,32 @@ impl Processes {
     }
 
     pub(crate) fn disable_autofocus(&mut self) {
-        self.autofocus = false;
+        self.autofocus_enabled = false;
     }
 
     pub(crate) fn toggle_autofocus(&mut self) {
-        self.autofocus = !self.autofocus;
+        self.autofocus_enabled = !self.autofocus_enabled;
     }
 
-    pub(crate) fn autofocus(&self) -> bool {
-        self.autofocus
+    pub(crate) fn autofocus_enabled(&self) -> bool {
+        self.autofocus_enabled
+    }
+
+    pub(crate) fn enter_focused_process(&mut self) {
+        self.entered = true;
+    }
+
+    pub(crate) fn leave_focused_process(&mut self) {
+        self.entered = false;
+    }
+
+    pub(crate) fn entered(&self) -> bool {
+        self.entered
+    }
+
+    /// Whether autofocus should currently be used.
+    fn should_autofocus(&self) -> bool {
+        self.autofocus_enabled && !self.entered
     }
 
     pub(crate) fn start_process(
@@ -90,7 +119,7 @@ impl Processes {
             process.do_work()?;
         }
 
-        if self.autofocus {
+        if self.should_autofocus() {
             self.focused_process_index = self
                 .processes
                 .iter()
@@ -170,6 +199,10 @@ impl Processes {
 
     pub(crate) fn restart_focused(&mut self) {
         self.processes[self.focused_process_index].restart();
+    }
+
+    pub(crate) fn send_input(&mut self, input: KeyEvent) {
+        self.processes[self.focused_process_index].send_input(input)
     }
 }
 
@@ -367,6 +400,17 @@ impl Process {
             ProcessInstanceState::Running { instance, .. } => instance.lines(),
         }
     }
+
+    pub(crate) fn send_input(&self, input: KeyEvent) {
+        match &self.instance_state {
+            ProcessInstanceState::NotStarted
+            | ProcessInstanceState::WaitingForUpstream
+            | ProcessInstanceState::PendingRestart => {}
+            ProcessInstanceState::Running { instance, .. } => {
+                instance.send_input(input);
+            }
+        }
+    }
 }
 
 pub(crate) struct ProcessInstance {
@@ -551,6 +595,13 @@ impl ProcessInstance {
         terminal
             .screen()
             .lines_in_phys_range(terminal.screen().phys_range(&(0..VisibleRowIndex::MAX)))
+    }
+
+    fn send_input(&self, input: KeyEvent) {
+        let mut terminal = self.terminal.lock().unwrap();
+        // TODO: handle errors
+        let _ = terminal.key_down(input.key, input.modifiers);
+        let _ = terminal.key_up(input.key, input.modifiers);
     }
 }
 

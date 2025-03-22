@@ -123,7 +123,9 @@ For the purposes of starting other processes, the successful statuses are
 
 * Press `a` to toggle autofocus. When autofocus is on, the first process with
   an error will be focused automatically.
-* Press `r` to restart the focused process.
 * Use the up and down arrow keys to focus on the previous and next process
   respectively.
+* Press `r` to restart the focused process.
+* Press `Ctrl+e` to enter a process. While a process is entered, any input will
+  be sent to that process. Press `Ctrl+e` again to leave the process.
 * Press `Ctrl+c` to quit.

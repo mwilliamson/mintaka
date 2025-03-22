@@ -29,7 +29,12 @@ fn main() {
 
         ui.render(&processes);
 
-        match ui.poll_input().unwrap() {
+        let entered = {
+            let processes = processes.lock().unwrap();
+            processes.entered()
+        };
+
+        match ui.poll_input(entered).unwrap() {
             Some(MintakaInputEvent::Quit) => {
                 return;
             }
@@ -50,6 +55,18 @@ fn main() {
             Some(MintakaInputEvent::RestartProcess) => {
                 let mut processes = processes.lock().unwrap();
                 processes.restart_focused();
+            }
+            Some(MintakaInputEvent::EnterProcess) => {
+                let mut processes = processes.lock().unwrap();
+                processes.enter_focused_process();
+            }
+            Some(MintakaInputEvent::LeaveProcess) => {
+                let mut processes = processes.lock().unwrap();
+                processes.leave_focused_process();
+            }
+            Some(MintakaInputEvent::SendToFocusedProcess(key_event)) => {
+                let mut processes = processes.lock().unwrap();
+                processes.send_input(key_event);
             }
             None => {}
         }
