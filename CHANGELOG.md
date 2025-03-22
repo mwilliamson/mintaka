@@ -1,5 +1,11 @@
 # Changelog
 
+# 0.3.0
+
+* Detect the background of the terminal and adjust the styling accordingly.
+
+* Show keyboard controls along the bottom of the UI.
+
 # 0.2.0
 
 * Remove key binding for q to quit.
