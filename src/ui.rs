@@ -126,21 +126,21 @@ fn render_chrome(
     frame: &mut Frame,
     theme: MintakaTheme
 ) {
-    let layout = Layout::horizontal([
-        Constraint::Length(process_list_width(processes, theme) as u16),
-        Constraint::Min(30),
-    ]).split(frame.size());
-
-    let left_layout = Layout::vertical([
+    let layout = Layout::vertical([
         Constraint::Fill(1),
         Constraint::Length(1),
+    ]).split(frame.size());
+
+    let top_layout = Layout::horizontal([
+        Constraint::Length(process_list_width(processes, theme) as u16),
+        Constraint::Min(30),
     ]).split(layout[0]);
 
-    render_process_list(processes, left_layout[0], frame, theme);
+    render_process_list(processes, top_layout[0], frame, theme);
 
-    render_focus(processes, left_layout[1], frame);
+    render_status_bar(processes, layout[1], frame);
 
-    render_process_pane_placeholder(process_pane, layout[1], frame);
+    render_process_pane_placeholder(process_pane, top_layout[1], frame);
 }
 
 fn process_list_width(processes: &Processes, theme: MintakaTheme) -> usize {
@@ -239,7 +239,7 @@ fn process_list_labels(
         })
 }
 
-fn render_focus(processes: &Processes, area: Rect, frame: &mut Frame) {
+fn render_status_bar(processes: &Processes, area: Rect, frame: &mut Frame) {
     let focus_str = if processes.autofocus() {
         "Auto"
     } else {
