@@ -27,21 +27,32 @@ pub(super) fn describe(processes: &Processes) -> [(&str, &str); 4] {
 }
 
 pub(super) fn read_key_event(key_event: KeyEvent) -> Option<MintakaInputEvent> {
-    if matches!(
-        key_event,
+    match key_event {
+        KeyEvent {
+            key: KeyCode::Char('a'),
+            modifiers: KeyModifiers::NONE,
+        } => Some(MintakaInputEvent::ToggleAutofocus),
+
+        KeyEvent {
+            key: KeyCode::UpArrow,
+            modifiers: KeyModifiers::NONE,
+        } => Some(MintakaInputEvent::FocusProcessUp),
+
+        KeyEvent {
+            key: KeyCode::DownArrow,
+            modifiers: KeyModifiers::NONE,
+        } => Some(MintakaInputEvent::FocusProcessDown),
+
+        KeyEvent {
+            key: KeyCode::Char('r'),
+            modifiers: KeyModifiers::NONE,
+        } => Some(MintakaInputEvent::RestartProcess),
+
         KeyEvent {
             key: KeyCode::Char('c'),
-            modifiers: KeyModifiers::CTRL
-        }
-    ) {
-        return Some(MintakaInputEvent::Quit);
-    }
+            modifiers: KeyModifiers::CTRL,
+        } => Some(MintakaInputEvent::Quit),
 
-    match key_event.key {
-        wezterm_term::KeyCode::Char('a') => Some(MintakaInputEvent::ToggleAutofocus),
-        wezterm_term::KeyCode::UpArrow => Some(MintakaInputEvent::FocusProcessUp),
-        wezterm_term::KeyCode::DownArrow => Some(MintakaInputEvent::FocusProcessDown),
-        wezterm_term::KeyCode::Char('r') => Some(MintakaInputEvent::RestartProcess),
         _ => None,
     }
 }
