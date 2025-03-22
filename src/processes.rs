@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use multimap::MultiMap;
 use portable_pty::{ChildKiller, ExitStatus, PtyPair, PtySize, PtySystem};
 use termwiz::{
-    escape::{parser::Parser, Esc, EscCode},
+    escape::{Esc, EscCode, parser::Parser},
     terminal::TerminalWaker,
 };
 use wezterm_term::{TerminalSize, VisibleRowIndex};

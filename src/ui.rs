@@ -1,19 +1,19 @@
 use std::sync::{Arc, Mutex};
 
 use ratatui::{
+    Frame,
     backend::TermwizBackend,
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
     style::{Color, Stylize},
     text::{Line, Span, Text},
     widgets::{Block, List, ListItem, ListState, Widget},
-    Frame,
 };
 use termwiz::{
     caps::ProbeHints,
     input::InputEvent,
     surface::{Change, Surface},
-    terminal::{buffered::BufferedTerminal, SystemTerminal, Terminal, TerminalWaker},
+    terminal::{SystemTerminal, Terminal, TerminalWaker, buffered::BufferedTerminal},
 };
 use theme::MintakaTheme;
 use wezterm_term::CellAttributes;

@@ -1,7 +1,8 @@
 use std::{
     fs::OpenOptions,
     io::Read,
-    path::{Path, PathBuf}, sync::LazyLock,
+    path::{Path, PathBuf},
+    sync::LazyLock,
 };
 
 use regex::Regex;
@@ -78,7 +79,9 @@ impl ProcessTypeConfig {
     }
 }
 
-static TSC_WATCH_ERROR_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(" Found ([0-9]+) error[s]?\\. Watching for file changes\\.").unwrap());
+static TSC_WATCH_ERROR_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(" Found ([0-9]+) error[s]?\\. Watching for file changes\\.").unwrap()
+});
 
 #[allow(dead_code)]
 #[derive(Debug)]
