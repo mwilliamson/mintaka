@@ -6,6 +6,22 @@ use wezterm_term::CellAttributes;
 
 use crate::processes::{ProcessStatus, Processes};
 
+/// Render the UI.
+///
+/// ```
+/// +------------+------------------------------------------+
+/// |            |                                          |
+/// |            |                                          |
+/// |            |                                          |
+/// |  Process   |               Process                    |
+/// |  List      |               Pane                       |
+/// |            |                                          |
+/// |            |                                          |
+/// |            |                                          |
+/// +------------+------------------------------------------+
+/// | Status Bar                                            |
+/// +------------+------------------------------------------+
+/// ```
 pub(crate) fn render_ui(processes: &Arc<Mutex<Processes>>, terminal: &mut ratatui::Terminal<TermwizBackend>) {
     let mut processes = processes.lock().unwrap();
     let mut process_pane = ProcessPane::new();
