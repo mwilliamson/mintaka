@@ -8,8 +8,8 @@ use crate::processes::Processes;
 
 mod cli;
 mod config;
-mod processes;
 mod process_statuses;
+mod processes;
 mod ui;
 
 fn main() {
@@ -35,7 +35,10 @@ fn main() {
             Some(InputEvent::Key(key_event)) => {
                 if matches!(
                     key_event,
-                    KeyEvent { key: KeyCode::Char('c'), modifiers: KeyModifiers::CTRL}
+                    KeyEvent {
+                        key: KeyCode::Char('c'),
+                        modifiers: KeyModifiers::CTRL
+                    }
                 ) {
                     return;
                 }
@@ -45,12 +48,12 @@ fn main() {
                         let mut processes = processes.lock().unwrap();
                         processes.disable_autofocus();
                         processes.move_focus_up();
-                    },
+                    }
                     wezterm_term::KeyCode::DownArrow => {
                         let mut processes = processes.lock().unwrap();
                         processes.disable_autofocus();
                         processes.move_focus_down();
-                    },
+                    }
                     wezterm_term::KeyCode::Char('a') => {
                         let mut processes = processes.lock().unwrap();
                         processes.toggle_autofocus();
@@ -59,9 +62,9 @@ fn main() {
                         let mut processes = processes.lock().unwrap();
                         processes.restart_focused();
                     }
-                    _ => {},
+                    _ => {}
                 }
-            },
+            }
             _ => {}
         }
     }

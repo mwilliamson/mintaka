@@ -1,4 +1,8 @@
-use std::{fs::OpenOptions, io::Read, path::{Path, PathBuf}};
+use std::{
+    fs::OpenOptions,
+    io::Read,
+    path::{Path, PathBuf},
+};
 
 use regex::Regex;
 use serde::Deserialize;
@@ -34,13 +38,19 @@ impl ProcessConfig {
     pub(crate) fn process_status_analyzer(&self) -> ProcessStatusAnalyzer {
         match self.process_type.as_ref() {
             None => ProcessStatusAnalyzer {
-                success_regex: self.success_regex.as_ref().map(|regex| Regex::new(regex).unwrap()),
-                error_regex: self.error_regex.as_ref().map(|regex| Regex::new(regex).unwrap()),
+                success_regex: self
+                    .success_regex
+                    .as_ref()
+                    .map(|regex| Regex::new(regex).unwrap()),
+                error_regex: self
+                    .error_regex
+                    .as_ref()
+                    .map(|regex| Regex::new(regex).unwrap()),
             },
             Some(process_type) => ProcessStatusAnalyzer {
                 success_regex: process_type.success_regex(),
                 error_regex: process_type.error_regex(),
-            }
+            },
         }
     }
 
@@ -88,10 +98,11 @@ pub(crate) fn load_config(path: &Path) -> Result<MintakaConfig, ConfigError> {
         .open(path)
         .map_err(ConfigError::FileOpenFailed)?;
     let mut config_str = String::new();
-    file.read_to_string(&mut config_str).map_err(ConfigError::FileReadFailed)?;
+    file.read_to_string(&mut config_str)
+        .map_err(ConfigError::FileReadFailed)?;
 
-    let config: MintakaConfig = toml::from_str(&config_str)
-        .map_err(ConfigError::DeserializationFailed)?;
+    let config: MintakaConfig =
+        toml::from_str(&config_str).map_err(ConfigError::DeserializationFailed)?;
 
     Ok(config)
 }

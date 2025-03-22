@@ -15,13 +15,15 @@ impl ProcessStatusAnalyzer {
 
         if let Some(error_regex) = &self.error_regex {
             match error_regex.captures(last_line) {
-                None => {},
+                None => {}
                 Some(captures) => {
-                    let error_count: Option<u64> = captures.get(1).and_then(|capture| capture.as_str().parse().ok());
+                    let error_count: Option<u64> = captures
+                        .get(1)
+                        .and_then(|capture| capture.as_str().parse().ok());
                     if error_count == Some(0) {
                         return Some(ProcessStatus::Success);
                     } else {
-                        return Some(ProcessStatus::Errors { error_count })
+                        return Some(ProcessStatus::Errors { error_count });
                     }
                 }
             }

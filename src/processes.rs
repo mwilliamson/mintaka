@@ -2,7 +2,10 @@ use std::sync::{Arc, Mutex};
 
 use multimap::MultiMap;
 use portable_pty::{ChildKiller, ExitStatus, PtyPair, PtySize, PtySystem};
-use termwiz::{escape::{parser::Parser, Esc, EscCode}, terminal::TerminalWaker};
+use termwiz::{
+    escape::{parser::Parser, Esc, EscCode},
+    terminal::TerminalWaker,
+};
 use wezterm_term::{TerminalSize, VisibleRowIndex};
 
 use crate::{config::ProcessConfig, process_statuses::ProcessStatusAnalyzer};
@@ -88,7 +91,9 @@ impl Processes {
         }
 
         if self.autofocus {
-            self.focused_process_index = self.processes.iter()
+            self.focused_process_index = self
+                .processes
+                .iter()
                 .enumerate()
                 .find(|(_process_index, process)| process.status().is_failure())
                 .map(|(process_index, _process)| process_index)
@@ -183,14 +188,10 @@ pub(crate) enum ProcessStatus {
     Success,
 
     /// The process is running and has reached an error state.
-    Errors {
-        error_count: Option<u64>,
-    },
+    Errors { error_count: Option<u64> },
 
     /// The process has exited.
-    Exited {
-        exit_code: u32,
-    },
+    Exited { exit_code: u32 },
 }
 
 impl ProcessStatus {
@@ -253,7 +254,9 @@ impl Process {
         pty_size: PtySize,
         on_change: TerminalWaker,
     ) -> Self {
-        let name = process_config.name.clone()
+        let name = process_config
+            .name
+            .clone()
             .unwrap_or_else(|| process_config.command.join(" "));
 
         let instance_state = if process_config.autostart() {
@@ -272,9 +275,7 @@ impl Process {
         }
     }
 
-    fn start(
-        &mut self,
-    ) -> Result<(), ProcessError> {
+    fn start(&mut self) -> Result<(), ProcessError> {
         let pty_pair = self.pty_system.openpty(self.pty_size).unwrap();
 
         let (status_tx, status_rx) = std::sync::mpsc::channel();
@@ -308,10 +309,8 @@ impl Process {
     }
 
     fn kill(&mut self, new_process_instance_state: ProcessInstanceState) {
-        let previous_instance_state = std::mem::replace(
-            &mut self.instance_state,
-            new_process_instance_state,
-        );
+        let previous_instance_state =
+            std::mem::replace(&mut self.instance_state, new_process_instance_state);
         if let ProcessInstanceState::Running { mut instance, .. } = previous_instance_state {
             instance.kill();
         }
@@ -322,7 +321,9 @@ impl Process {
             ProcessInstanceState::NotStarted
             | ProcessInstanceState::WaitingForUpstream
             | ProcessInstanceState::PendingRestart => None,
-            ProcessInstanceState::Running { status, status_rx, .. } => {
+            ProcessInstanceState::Running {
+                status, status_rx, ..
+            } => {
                 let new_status = status_rx.try_iter().last();
 
                 if let Some(new_status) = new_status {
@@ -330,7 +331,7 @@ impl Process {
                 }
 
                 new_status
-            },
+            }
         }
     }
 
@@ -356,7 +357,6 @@ impl Process {
             ProcessInstanceState::PendingRestart => ProcessStatus::Running,
             ProcessInstanceState::Running { status, .. } => *status,
         }
-
     }
 
     fn lines(&self) -> Vec<wezterm_term::Line> {
@@ -412,8 +412,12 @@ impl ProcessInstance {
         })
     }
 
-    fn process_config_to_pty_command(process_config: &ProcessConfig) -> Result<portable_pty::CommandBuilder, ProcessError> {
-        let executable = process_config.command.first()
+    fn process_config_to_pty_command(
+        process_config: &ProcessConfig,
+    ) -> Result<portable_pty::CommandBuilder, ProcessError> {
+        let executable = process_config
+            .command
+            .first()
             .ok_or(ProcessError::ProcessConfigMissingCommand)?;
         let mut pty_command = portable_pty::CommandBuilder::new(executable);
 
@@ -429,7 +433,10 @@ impl ProcessInstance {
         Ok(pty_command)
     }
 
-    fn create_process_terminal(writer: Box<dyn std::io::Write + Send>, size: PtySize) -> wezterm_term::Terminal {
+    fn create_process_terminal(
+        writer: Box<dyn std::io::Write + Send>,
+        size: PtySize,
+    ) -> wezterm_term::Terminal {
         let terminal_size = wezterm_term::TerminalSize {
             rows: size.rows.into(),
             cols: size.cols.into(),
@@ -467,9 +474,13 @@ impl ProcessInstance {
                 let bytes_read = reader.read(&mut bytes).unwrap();
                 if bytes_read == 0 {
                     // TODO: handle failure to get exit code properly
-                    let exit_code = child_process.wait().unwrap_or(ExitStatus::with_exit_code(1));
+                    let exit_code = child_process
+                        .wait()
+                        .unwrap_or(ExitStatus::with_exit_code(1));
 
-                    let new_status = ProcessStatus::Exited { exit_code: exit_code.exit_code() };
+                    let new_status = ProcessStatus::Exited {
+                        exit_code: exit_code.exit_code(),
+                    };
 
                     let _ = status_tx.send(new_status);
 
@@ -488,17 +499,19 @@ impl ProcessInstance {
                         termwiz::escape::Action::Print(char) => last_line.push(*char),
                         termwiz::escape::Action::PrintString(string) => last_line.push_str(string),
                         termwiz::escape::Action::Control(
-                            termwiz::escape::ControlCode::LineFeed |
-                            termwiz::escape::ControlCode::CarriageReturn
-                        ) |
-                        termwiz::escape::Action::Esc(Esc::Code(EscCode::FullReset)) => {
-                            if let Some(new_status) = process_status_analyzer.analyze_line(&last_line) {
+                            termwiz::escape::ControlCode::LineFeed
+                            | termwiz::escape::ControlCode::CarriageReturn,
+                        )
+                        | termwiz::escape::Action::Esc(Esc::Code(EscCode::FullReset)) => {
+                            if let Some(new_status) =
+                                process_status_analyzer.analyze_line(&last_line)
+                            {
                                 let _ = status_tx.send(new_status);
                             }
 
                             last_line.clear();
-                        },
-                        _ => {},
+                        }
+                        _ => {}
                     }
                 }
 
@@ -535,7 +548,9 @@ impl ProcessInstance {
 
     fn lines(&self) -> Vec<wezterm_term::Line> {
         let terminal = self.terminal.lock().unwrap();
-        terminal.screen().lines_in_phys_range(terminal.screen().phys_range(&(0..VisibleRowIndex::MAX)))
+        terminal
+            .screen()
+            .lines_in_phys_range(terminal.screen().phys_range(&(0..VisibleRowIndex::MAX)))
     }
 }
 
@@ -546,7 +561,6 @@ pub(crate) enum ProcessError {
 
     GetCurrentDirFailed(std::io::Error),
 }
-
 
 #[derive(Debug)]
 struct ProcessTerminal;
