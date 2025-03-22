@@ -20,7 +20,10 @@ use wezterm_term::CellAttributes;
 
 use crate::processes::{ProcessStatus, Processes};
 
+mod controls;
 mod theme;
+
+pub(crate) use controls::MintakaInputEvent;
 
 pub(crate) struct MintakaUi {
     terminal: ratatui::Terminal<TermwizBackend>,
@@ -60,20 +63,22 @@ impl MintakaUi {
         render_ui(processes, &mut self.terminal, self.theme)
     }
 
-    pub(crate) fn poll_input(
-        &mut self,
-    ) -> Result<Option<termwiz::input::InputEvent>, termwiz::Error> {
+    pub(crate) fn poll_input(&mut self) -> Result<Option<MintakaInputEvent>, termwiz::Error> {
         let buffered_terminal = self.terminal.backend_mut().buffered_terminal_mut();
         let input_event = buffered_terminal.terminal().poll_input(None)?;
 
-        if let Some(InputEvent::Resized { rows, cols }) = input_event {
-            // FIXME: this is working around a bug where we don't realize
-            // that we should redraw everything on resize in BufferedTerminal.
-            buffered_terminal.add_change(Change::ClearScreen(Default::default()));
-            buffered_terminal.resize(cols, rows);
-            Ok(None)
-        } else {
-            Ok(input_event)
+        match input_event {
+            Some(InputEvent::Resized { rows, cols }) => {
+                // FIXME: this is working around a bug where we don't realize
+                // that we should redraw everything on resize in BufferedTerminal.
+                buffered_terminal.add_change(Change::ClearScreen(Default::default()));
+                buffered_terminal.resize(cols, rows);
+                Ok(None)
+            }
+
+            Some(InputEvent::Key(key_event)) => Ok(controls::read_key_event(key_event)),
+
+            _ => Ok(None),
         }
     }
 }
@@ -227,23 +232,7 @@ fn process_list_labels(
 }
 
 fn render_status_bar(processes: &Processes, area: Rect, frame: &mut Frame, theme: MintakaTheme) {
-    let autofocus_status = if processes.autofocus() {
-        "(On) "
-    } else {
-        "(Off)"
-    };
-
-    let autofocus_str = format!("Autofocus {autofocus_status}");
-
-    // TODO: de-duplicate with input event handling
-    let controls = &[
-        (" a", &autofocus_str as &str),
-        ("↑↓", "Focus process"),
-        (" r", "Restart process"),
-        ("^c", "Quit"),
-    ];
-
-    let spans: Vec<_> = controls
+    let spans: Vec<_> = controls::describe(processes)
         .iter()
         .flat_map(|(shortcut, description)| {
             [
