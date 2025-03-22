@@ -1,12 +1,13 @@
-use std::{sync::{Arc, Mutex}, time::Duration};
+use std::sync::{Arc, Mutex};
 
-use ratatui::{backend::TermwizBackend, buffer::Buffer, layout::{Constraint, Layout, Rect}, style::{Color, Style, Stylize}, text::{Line, Text}, widgets::{Block, List, ListItem, ListState, Widget}, Frame};
+use ratatui::{backend::TermwizBackend, buffer::Buffer, layout::{Constraint, Layout, Rect}, style::{Color, Stylize}, text::{Line, Text}, widgets::{Block, List, ListItem, ListState, Widget}, Frame};
 use termwiz::{caps::ProbeHints, input::InputEvent, surface::{Change, Surface}, terminal::{buffered::BufferedTerminal, SystemTerminal, Terminal, TerminalWaker}};
+use theme::MintakaTheme;
 use wezterm_term::CellAttributes;
 
 use crate::processes::{ProcessStatus, Processes};
 
-
+mod theme;
 
 pub(crate) struct MintakaUi {
     terminal: ratatui::Terminal<TermwizBackend>,
@@ -16,7 +17,7 @@ pub(crate) struct MintakaUi {
 
 impl MintakaUi {
     pub(crate) fn new() -> Self {
-        let theme = Self::detect_theme();
+        let theme = MintakaTheme::detect();
 
         let terminal_capabilities = termwiz::caps::Capabilities::new_with_hints(ProbeHints::new_from_env().mouse_reporting(Some(false))).unwrap();
         let mut terminal = SystemTerminal::new(terminal_capabilities).unwrap();
@@ -27,15 +28,6 @@ impl MintakaUi {
         let terminal = ratatui::Terminal::new(TermwizBackend::with_buffered_terminal(buffered_terminal)).unwrap();
 
         Self { terminal, theme }
-    }
-
-    fn detect_theme() -> MintakaTheme {
-        let timeout = Duration::from_millis(100);
-        let theme = termbg::theme(timeout);
-        match theme {
-            Ok(termbg::Theme::Light) | Err(_) => MintakaTheme::Light,
-            Ok(termbg::Theme::Dark) => MintakaTheme::Dark,
-        }
     }
 
     pub(crate) fn waker(&mut self) -> TerminalWaker {
@@ -59,36 +51,6 @@ impl MintakaUi {
         } else {
             Ok(input_event)
         }
-    }
-}
-
-#[derive(Clone, Copy)]
-enum MintakaTheme {
-    Light,
-    Dark,
-}
-
-impl MintakaTheme {
-    fn fg_invert(&self) -> Color {
-        match self {
-            MintakaTheme::Light => Color::White,
-            MintakaTheme::Dark => Color::Black,
-        }
-    }
-
-    fn bg_invert(&self) -> Color {
-        match self {
-            MintakaTheme::Light => Color::Black,
-            MintakaTheme::Dark => Color::White,
-        }
-    }
-
-    fn text_style(&self) -> Style {
-        Style::default().fg(Color::Reset).bg(Color::Reset)
-    }
-
-    fn invert_style(&self) -> Style {
-        Style::default().fg(self.fg_invert()).bg(self.bg_invert())
     }
 }
 
