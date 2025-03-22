@@ -28,11 +28,4 @@ impl MintakaTheme {
             MintakaTheme::Dark => Style::default().fg(Color::Black).bg(Color::White),
         }
     }
-
-    pub(super) fn muted_highlight_style(&self) -> Style {
-        match self {
-            MintakaTheme::Light => Style::default().fg(Color::White).bg(Color::DarkGray),
-            MintakaTheme::Dark => Style::default().fg(Color::Black).bg(Color::Gray),
-        }
-    }
 }
