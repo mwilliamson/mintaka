@@ -1,8 +1,7 @@
 use std::sync::{Arc, Mutex};
 
-use ratatui::backend::TermwizBackend;
-use termwiz::{caps::ProbeHints, input::{InputEvent, KeyEvent}, surface::Change, terminal::{buffered::BufferedTerminal, SystemTerminal, Terminal}};
-use ui::render_ui;
+use termwiz::input::{InputEvent, KeyEvent};
+use ui::MintakaUi;
 use wezterm_term::{KeyCode, KeyModifiers};
 
 use crate::processes::Processes;
@@ -16,16 +15,9 @@ mod ui;
 fn main() {
     let config = cli::load_config().unwrap();
 
-    let terminal_capabilities = termwiz::caps::Capabilities::new_with_hints(ProbeHints::new_from_env().mouse_reporting(Some(false))).unwrap();
-    let mut terminal = SystemTerminal::new(terminal_capabilities).unwrap();
-    terminal.set_raw_mode().unwrap();
-    terminal.enter_alternate_screen().unwrap();
-    let terminal_waker = terminal.waker();
-    let buffered_terminal = BufferedTerminal::new(terminal).unwrap();
+    let mut ui = MintakaUi::new();
 
-    let mut terminal = ratatui::Terminal::new(TermwizBackend::with_buffered_terminal(buffered_terminal)).unwrap();
-
-    let mut processes = Processes::new(terminal_waker);
+    let mut processes = Processes::new(ui.waker());
     for process_config in config.processes {
         processes.start_process(process_config).unwrap();
     }
@@ -37,49 +29,40 @@ fn main() {
             processes_locked.do_work().unwrap();
         }
 
-        render_ui(&processes, &mut terminal);
+        ui.render(&processes);
 
-        let buffered_terminal = terminal.backend_mut().buffered_terminal_mut();
-        match buffered_terminal.terminal().poll_input(None).unwrap() {
-            Some(InputEvent::Resized { rows, cols }) => {
-                // FIXME: this is working around a bug where we don't realize
-                // that we should redraw everything on resize in BufferedTerminal.
-                buffered_terminal.add_change(Change::ClearScreen(Default::default()));
-                buffered_terminal.resize(cols, rows);
-            }
-            Some(input) => {
-                if let InputEvent::Key(key_event) = input {
-                    if matches!(
-                        key_event,
-                        KeyEvent { key: KeyCode::Char('c'), modifiers: KeyModifiers::CTRL}
-                    ) {
-                        return;
-                    }
+        match ui.poll_input().unwrap() {
+            Some(InputEvent::Key(key_event)) => {
+                if matches!(
+                    key_event,
+                    KeyEvent { key: KeyCode::Char('c'), modifiers: KeyModifiers::CTRL}
+                ) {
+                    return;
+                }
 
-                    match key_event.key {
-                        wezterm_term::KeyCode::UpArrow => {
-                            let mut processes = processes.lock().unwrap();
-                            processes.disable_autofocus();
-                            processes.move_focus_up();
-                        },
-                        wezterm_term::KeyCode::DownArrow => {
-                            let mut processes = processes.lock().unwrap();
-                            processes.disable_autofocus();
-                            processes.move_focus_down();
-                        },
-                        wezterm_term::KeyCode::Char('a') => {
-                            let mut processes = processes.lock().unwrap();
-                            processes.toggle_autofocus();
-                        }
-                        wezterm_term::KeyCode::Char('r') => {
-                            let mut processes = processes.lock().unwrap();
-                            processes.restart_focused();
-                        }
-                        _ => {},
+                match key_event.key {
+                    wezterm_term::KeyCode::UpArrow => {
+                        let mut processes = processes.lock().unwrap();
+                        processes.disable_autofocus();
+                        processes.move_focus_up();
+                    },
+                    wezterm_term::KeyCode::DownArrow => {
+                        let mut processes = processes.lock().unwrap();
+                        processes.disable_autofocus();
+                        processes.move_focus_down();
+                    },
+                    wezterm_term::KeyCode::Char('a') => {
+                        let mut processes = processes.lock().unwrap();
+                        processes.toggle_autofocus();
                     }
+                    wezterm_term::KeyCode::Char('r') => {
+                        let mut processes = processes.lock().unwrap();
+                        processes.restart_focused();
+                    }
+                    _ => {},
                 }
             },
-            None => {}
+            _ => {}
         }
     }
 }

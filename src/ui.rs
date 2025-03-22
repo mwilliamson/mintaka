@@ -1,10 +1,51 @@
 use std::sync::{Arc, Mutex};
 
 use ratatui::{backend::TermwizBackend, buffer::Buffer, layout::{Constraint, Layout, Rect}, style::{Color, Style, Stylize}, text::{Line, Text}, widgets::{Block, List, ListItem, ListState, Widget}, Frame};
-use termwiz::{surface::{Change, Surface}, terminal::{buffered::BufferedTerminal, Terminal}};
+use termwiz::{caps::ProbeHints, input::InputEvent, surface::{Change, Surface}, terminal::{buffered::BufferedTerminal, SystemTerminal, Terminal, TerminalWaker}};
 use wezterm_term::CellAttributes;
 
 use crate::processes::{ProcessStatus, Processes};
+
+pub(crate) struct MintakaUi {
+    terminal: ratatui::Terminal<TermwizBackend>,
+}
+
+impl MintakaUi {
+    pub(crate) fn new() -> Self {
+        let terminal_capabilities = termwiz::caps::Capabilities::new_with_hints(ProbeHints::new_from_env().mouse_reporting(Some(false))).unwrap();
+        let mut terminal = SystemTerminal::new(terminal_capabilities).unwrap();
+        terminal.set_raw_mode().unwrap();
+        terminal.enter_alternate_screen().unwrap();
+        let buffered_terminal = BufferedTerminal::new(terminal).unwrap();
+
+        let terminal = ratatui::Terminal::new(TermwizBackend::with_buffered_terminal(buffered_terminal)).unwrap();
+
+        Self { terminal }
+    }
+
+    pub(crate) fn waker(&mut self) -> TerminalWaker {
+        self.terminal.backend_mut().buffered_terminal_mut().terminal().waker()
+    }
+
+    pub(crate) fn render(&mut self, processes: &Arc<Mutex<Processes>>) {
+        render_ui(processes, &mut self.terminal)
+    }
+
+    pub(crate) fn poll_input(&mut self) -> Result<Option<termwiz::input::InputEvent>, termwiz::Error> {
+        let buffered_terminal = self.terminal.backend_mut().buffered_terminal_mut();
+        let input_event = buffered_terminal.terminal().poll_input(None)?;
+
+        if let Some(InputEvent::Resized { rows, cols }) = input_event {
+            // FIXME: this is working around a bug where we don't realize
+            // that we should redraw everything on resize in BufferedTerminal.
+            buffered_terminal.add_change(Change::ClearScreen(Default::default()));
+            buffered_terminal.resize(cols, rows);
+            Ok(None)
+        } else {
+            Ok(input_event)
+        }
+    }
+}
 
 /// Render the UI.
 ///
@@ -22,7 +63,7 @@ use crate::processes::{ProcessStatus, Processes};
 /// | Status Bar                                            |
 /// +------------+------------------------------------------+
 /// ```
-pub(crate) fn render_ui(processes: &Arc<Mutex<Processes>>, terminal: &mut ratatui::Terminal<TermwizBackend>) {
+fn render_ui(processes: &Arc<Mutex<Processes>>, terminal: &mut ratatui::Terminal<TermwizBackend>) {
     let mut processes = processes.lock().unwrap();
     let mut process_pane = ProcessPane::new();
 
