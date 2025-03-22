@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use ratatui::{backend::TermwizBackend, buffer::Buffer, layout::{Constraint, Layout, Rect}, style::{Color, Style, Stylize}, text::{Line, Text}, widgets::{Block, List, ListItem, ListState, Widget}, Frame};
-use termwiz::surface::{Change, Surface};
+use termwiz::{surface::{Change, Surface}, terminal::{buffered::BufferedTerminal, UnixTerminal}};
 use wezterm_term::CellAttributes;
 
 use crate::processes::{ProcessStatus, Processes};
@@ -25,6 +25,7 @@ use crate::processes::{ProcessStatus, Processes};
 pub(crate) fn render_ui(processes: &Arc<Mutex<Processes>>, terminal: &mut ratatui::Terminal<TermwizBackend>) {
     let mut processes = processes.lock().unwrap();
     let mut process_pane = ProcessPane::new();
+
     terminal.draw(|frame| {
         render_chrome(&processes, &mut process_pane, frame);
     }).unwrap();
@@ -32,29 +33,7 @@ pub(crate) fn render_ui(processes: &Arc<Mutex<Processes>>, terminal: &mut ratatu
     let buffered_terminal = terminal.backend_mut().buffered_terminal_mut();
     processes.resize((process_pane.area.width.into(), process_pane.area.height.into()));
 
-    let lines = processes.lines();
-    let mut process_surface = Surface::new(process_pane.area.width.into(), process_pane.area.height.into());
-    process_surface.add_change(Change::ClearScreen(Default::default()));
-
-    for (line_index, line) in lines.iter().enumerate() {
-        if line_index != 0 {
-            process_surface.add_change(
-                termwiz::surface::Change::Text("\r\n".to_owned()),
-            );
-        }
-        let changes = line.changes(&CellAttributes::blank());
-        process_surface.add_changes(changes);
-        process_surface.add_change(
-            termwiz::surface::Change::AllAttributes(CellAttributes::blank()),
-        );
-    }
-
-    buffered_terminal.draw_from_screen(
-        &process_surface,
-        process_pane.area.x.into(),
-        process_pane.area.y.into(),
-    );
-    buffered_terminal.flush().unwrap();
+    render_process_pane(&processes, &process_pane, buffered_terminal);
 }
 
 /// Render the chrome of the UI: that is, render everything except for the
@@ -186,6 +165,36 @@ fn render_focus(processes: &Processes, area: Rect, frame: &mut Frame) {
 fn render_process_pane_placeholder(process_pane: &mut ProcessPane, area: Rect, frame: &mut Frame) {
     // TODO: render directly?
     frame.render_widget(process_pane, area);
+}
+
+fn render_process_pane(
+    processes: &Processes,
+    process_pane: &ProcessPane,
+    buffered_terminal: &mut BufferedTerminal<UnixTerminal>,
+) {
+    let lines = processes.lines();
+    let mut process_surface = Surface::new(process_pane.area.width.into(), process_pane.area.height.into());
+    process_surface.add_change(Change::ClearScreen(Default::default()));
+
+    for (line_index, line) in lines.iter().enumerate() {
+        if line_index != 0 {
+            process_surface.add_change(
+                termwiz::surface::Change::Text("\r\n".to_owned()),
+            );
+        }
+        let changes = line.changes(&CellAttributes::blank());
+        process_surface.add_changes(changes);
+        process_surface.add_change(
+            termwiz::surface::Change::AllAttributes(CellAttributes::blank()),
+        );
+    }
+
+    buffered_terminal.draw_from_screen(
+        &process_surface,
+        process_pane.area.x.into(),
+        process_pane.area.y.into(),
+    );
+    buffered_terminal.flush().unwrap();
 }
 
 struct ProcessPane {
