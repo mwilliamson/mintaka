@@ -26,7 +26,7 @@ pub(crate) fn render_ui(processes: &Arc<Mutex<Processes>>, terminal: &mut ratatu
     let mut processes = processes.lock().unwrap();
     let mut process_pane = ProcessPane::new();
     terminal.draw(|frame| {
-        render_main(&processes, &mut process_pane, frame);
+        render_chrome(&processes, &mut process_pane, frame);
     }).unwrap();
 
     let buffered_terminal = terminal.backend_mut().buffered_terminal_mut();
@@ -57,7 +57,9 @@ pub(crate) fn render_ui(processes: &Arc<Mutex<Processes>>, terminal: &mut ratatu
     buffered_terminal.flush().unwrap();
 }
 
-fn render_main(processes: &Processes, process_pane: &mut ProcessPane, frame: &mut Frame) {
+/// Render the chrome of the UI: that is, render everything except for the
+/// actual output of the process.
+fn render_chrome(processes: &Processes, process_pane: &mut ProcessPane, frame: &mut Frame) {
     let layout = Layout::horizontal([
         Constraint::Length(process_list_width(processes) as u16),
         Constraint::Min(30),
