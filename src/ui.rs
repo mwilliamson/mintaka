@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use ratatui::{backend::TermwizBackend, buffer::Buffer, layout::{Constraint, Layout, Rect}, style::{Color, Style, Stylize}, text::{Line, Text}, widgets::{Block, List, ListItem, ListState, Widget}, Frame};
-use termwiz::{surface::{Change, Surface}, terminal::{buffered::BufferedTerminal, UnixTerminal}};
+use termwiz::{surface::{Change, Surface}, terminal::{buffered::BufferedTerminal, Terminal}};
 use wezterm_term::CellAttributes;
 
 use crate::processes::{ProcessStatus, Processes};
@@ -167,10 +167,10 @@ fn render_process_pane_placeholder(process_pane: &mut ProcessPane, area: Rect, f
     frame.render_widget(process_pane, area);
 }
 
-fn render_process_pane(
+fn render_process_pane<T: Terminal>(
     processes: &Processes,
     process_pane: &ProcessPane,
-    buffered_terminal: &mut BufferedTerminal<UnixTerminal>,
+    buffered_terminal: &mut BufferedTerminal<T>,
 ) {
     let lines = processes.lines();
     let mut process_surface = Surface::new(process_pane.area.width.into(), process_pane.area.height.into());
