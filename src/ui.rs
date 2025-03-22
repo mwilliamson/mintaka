@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use ratatui::{backend::TermwizBackend, buffer::Buffer, layout::{Constraint, Layout, Rect}, style::{Color, Stylize}, text::{Line, Text}, widgets::{Block, List, ListItem, ListState, Widget}, Frame};
+use ratatui::{backend::TermwizBackend, buffer::Buffer, layout::{Constraint, Layout, Rect}, style::{Color, Stylize}, text::{Line, Span, Text}, widgets::{Block, List, ListItem, ListState, Widget}, Frame};
 use termwiz::{caps::ProbeHints, input::InputEvent, surface::{Change, Surface}, terminal::{buffered::BufferedTerminal, SystemTerminal, Terminal, TerminalWaker}};
 use theme::MintakaTheme;
 use wezterm_term::CellAttributes;
@@ -214,16 +214,33 @@ fn render_status_bar(
     frame: &mut Frame,
     theme: MintakaTheme,
 ) {
-    let focus_str = if processes.autofocus() {
-        "Auto"
+    let autofocus_status = if processes.autofocus() {
+        "(On) "
     } else {
-        "Manual"
+        "(Off)"
     };
 
-    let style = theme.invert_style();
+    let autofocus_str = format!("Autofocus {autofocus_status}");
+
+    // TODO: de-duplicate with input event handling
+    let controls = &[
+        (" a", &autofocus_str as &str),
+        ("↑↓", "Focus process"),
+        (" r", "Restart process"),
+        ("^c", "Quit"),
+    ];
+
+    let spans: Vec<_> = controls.iter().flat_map(|(shortcut, description)| {
+        [
+            Span::styled(*shortcut, theme.text_style()),
+            Span::from("  "),
+            Span::from(*description),
+            Span::from("  "),
+        ].into_iter()
+    }).collect();
 
     frame.render_widget(
-        Line::styled(format!("  Focus: {focus_str}"), style),
+        Line::from(spans).style(theme.invert_style()),
         area,
     );
 }
