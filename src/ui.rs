@@ -82,6 +82,14 @@ impl MintakaTheme {
             MintakaTheme::Dark => Color::White,
         }
     }
+
+    fn text_style(&self) -> Style {
+        Style::default().fg(Color::Reset).bg(Color::Reset)
+    }
+
+    fn invert_style(&self) -> Style {
+        Style::default().fg(self.fg_invert()).bg(self.bg_invert())
+    }
 }
 
 /// Render the UI.
@@ -138,7 +146,7 @@ fn render_chrome(
 
     render_process_list(processes, top_layout[0], frame, theme);
 
-    render_status_bar(processes, layout[1], frame);
+    render_status_bar(processes, layout[1], frame, theme);
 
     render_process_pane_placeholder(process_pane, top_layout[1], frame);
 }
@@ -173,8 +181,8 @@ fn process_list_labels(
     processes: & Processes,
     theme: MintakaTheme,
 ) -> impl Iterator<Item=ListItem> {
-    let normal_style = Style::default().fg(Color::Reset).bg(Color::Reset);
-    let focused_style = Style::default().fg(theme.fg_invert()).bg(theme.bg_invert());
+    let normal_style = theme.text_style();
+    let focused_style = theme.invert_style();
 
     processes.processes()
         .into_iter()
@@ -228,9 +236,8 @@ fn process_list_labels(
                     (format!("EXIT {exit_code}"), status_color)
                 }
             };
-            let status_style = Style::default()
+            let status_style = style
                 .fg(status_color)
-                .bg(style.bg.unwrap())
                 .bold();
 
             text.push_line(Line::styled(format!("    {status_str}"), status_style));
@@ -239,15 +246,22 @@ fn process_list_labels(
         })
 }
 
-fn render_status_bar(processes: &Processes, area: Rect, frame: &mut Frame) {
+fn render_status_bar(
+    processes: &Processes,
+    area: Rect,
+    frame: &mut Frame,
+    theme: MintakaTheme,
+) {
     let focus_str = if processes.autofocus() {
         "Auto"
     } else {
         "Manual"
     };
 
+    let style = theme.invert_style();
+
     frame.render_widget(
-        Line::raw(format!("  Focus: {focus_str}")),
+        Line::styled(format!("  Focus: {focus_str}"), style),
         area,
     );
 }
