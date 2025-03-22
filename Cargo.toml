@@ -17,6 +17,7 @@ portable-pty = { git = "https://github.com/wez/wezterm.git", rev = "8fa4ba9ace4e
 ratatui = { version = "0.26.2", default-features = false, features = ["termwiz"] }
 regex = "1.10.4"
 serde = { version = "1.0.200", features = ["derive"] }
+termbg = "0.6.2"
 termwiz = { git = "https://github.com/wez/wezterm.git", features = ["widgets"], rev = "8fa4ba9ace4e3e9bb17246e6dcfe1ec175ff49aa" }
 toml = "0.8.12"
 wezterm-term = { git = "https://github.com/wez/wezterm.git", rev = "8fa4ba9ace4e3e9bb17246e6dcfe1ec175ff49aa" }

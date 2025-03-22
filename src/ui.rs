@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::{sync::{Arc, Mutex}, time::Duration};
 
 use ratatui::{backend::TermwizBackend, buffer::Buffer, layout::{Constraint, Layout, Rect}, style::{Color, Style, Stylize}, text::{Line, Text}, widgets::{Block, List, ListItem, ListState, Widget}, Frame};
 use termwiz::{caps::ProbeHints, input::InputEvent, surface::{Change, Surface}, terminal::{buffered::BufferedTerminal, SystemTerminal, Terminal, TerminalWaker}};
@@ -6,12 +6,18 @@ use wezterm_term::CellAttributes;
 
 use crate::processes::{ProcessStatus, Processes};
 
+
+
 pub(crate) struct MintakaUi {
     terminal: ratatui::Terminal<TermwizBackend>,
+
+    theme: MintakaTheme,
 }
 
 impl MintakaUi {
     pub(crate) fn new() -> Self {
+        let theme = Self::detect_theme();
+
         let terminal_capabilities = termwiz::caps::Capabilities::new_with_hints(ProbeHints::new_from_env().mouse_reporting(Some(false))).unwrap();
         let mut terminal = SystemTerminal::new(terminal_capabilities).unwrap();
         terminal.set_raw_mode().unwrap();
@@ -20,7 +26,16 @@ impl MintakaUi {
 
         let terminal = ratatui::Terminal::new(TermwizBackend::with_buffered_terminal(buffered_terminal)).unwrap();
 
-        Self { terminal }
+        Self { terminal, theme }
+    }
+
+    fn detect_theme() -> MintakaTheme {
+        let timeout = Duration::from_millis(100);
+        let theme = termbg::theme(timeout);
+        match theme {
+            Ok(termbg::Theme::Light) | Err(_) => MintakaTheme::Light,
+            Ok(termbg::Theme::Dark) => MintakaTheme::Dark,
+        }
     }
 
     pub(crate) fn waker(&mut self) -> TerminalWaker {
@@ -28,7 +43,7 @@ impl MintakaUi {
     }
 
     pub(crate) fn render(&mut self, processes: &Arc<Mutex<Processes>>) {
-        render_ui(processes, &mut self.terminal)
+        render_ui(processes, &mut self.terminal, self.theme)
     }
 
     pub(crate) fn poll_input(&mut self) -> Result<Option<termwiz::input::InputEvent>, termwiz::Error> {
@@ -43,6 +58,28 @@ impl MintakaUi {
             Ok(None)
         } else {
             Ok(input_event)
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum MintakaTheme {
+    Light,
+    Dark,
+}
+
+impl MintakaTheme {
+    fn fg_invert(&self) -> Color {
+        match self {
+            MintakaTheme::Light => Color::White,
+            MintakaTheme::Dark => Color::Black,
+        }
+    }
+
+    fn bg_invert(&self) -> Color {
+        match self {
+            MintakaTheme::Light => Color::Black,
+            MintakaTheme::Dark => Color::White,
         }
     }
 }
@@ -63,12 +100,16 @@ impl MintakaUi {
 /// | Status Bar                                            |
 /// +------------+------------------------------------------+
 /// ```
-fn render_ui(processes: &Arc<Mutex<Processes>>, terminal: &mut ratatui::Terminal<TermwizBackend>) {
+fn render_ui(
+    processes: &Arc<Mutex<Processes>>,
+    terminal: &mut ratatui::Terminal<TermwizBackend>,
+    theme: MintakaTheme,
+) {
     let mut processes = processes.lock().unwrap();
     let mut process_pane = ProcessPane::new();
 
     terminal.draw(|frame| {
-        render_chrome(&processes, &mut process_pane, frame);
+        render_chrome(&processes, &mut process_pane, frame, theme);
     }).unwrap();
 
     let buffered_terminal = terminal.backend_mut().buffered_terminal_mut();
@@ -79,9 +120,14 @@ fn render_ui(processes: &Arc<Mutex<Processes>>, terminal: &mut ratatui::Terminal
 
 /// Render the chrome of the UI: that is, render everything except for the
 /// actual output of the process.
-fn render_chrome(processes: &Processes, process_pane: &mut ProcessPane, frame: &mut Frame) {
+fn render_chrome(
+    processes: &Processes,
+    process_pane: &mut ProcessPane,
+    frame: &mut Frame,
+    theme: MintakaTheme
+) {
     let layout = Layout::horizontal([
-        Constraint::Length(process_list_width(processes) as u16),
+        Constraint::Length(process_list_width(processes, theme) as u16),
         Constraint::Min(30),
     ]).split(frame.size());
 
@@ -90,15 +136,15 @@ fn render_chrome(processes: &Processes, process_pane: &mut ProcessPane, frame: &
         Constraint::Length(1),
     ]).split(layout[0]);
 
-    render_process_list(processes, left_layout[0], frame);
+    render_process_list(processes, left_layout[0], frame, theme);
 
     render_focus(processes, left_layout[1], frame);
 
     render_process_pane_placeholder(process_pane, layout[1], frame);
 }
 
-fn process_list_width(processes: &Processes) -> usize {
-    let process_labels = process_list_labels(processes);
+fn process_list_width(processes: &Processes, theme: MintakaTheme) -> usize {
+    let process_labels = process_list_labels(processes, theme);
     let min_label_width = 15;
     let label_width = process_labels
         .map(|label| label.width())
@@ -110,8 +156,8 @@ fn process_list_width(processes: &Processes) -> usize {
     label_width + border_width * 2
 }
 
-fn render_process_list(processes: &Processes, area: Rect, frame: &mut Frame) {
-    let process_labels = process_list_labels(processes);
+fn render_process_list(processes: &Processes, area: Rect, frame: &mut Frame, theme: MintakaTheme) {
+    let process_labels = process_list_labels(processes, theme);
     let process_list = List::new(process_labels)
         .block(Block::bordered());
     // TODO: maintain list state
@@ -123,9 +169,12 @@ const STATUS_COLOR_SUCCESS: Color = Color::Green;
 const STATUS_COLOR_OTHER: Color = Color::DarkGray;
 const STATUS_COLOR_FAILED: Color = Color::Red;
 
-fn process_list_labels(processes: & Processes) -> impl Iterator<Item=ListItem> {
-    let normal_style = Style::default().fg(Color::Black).bg(Color::White);
-    let focused_style = Style::default().fg(Color::White).bg(Color::Black);
+fn process_list_labels(
+    processes: & Processes,
+    theme: MintakaTheme,
+) -> impl Iterator<Item=ListItem> {
+    let normal_style = Style::default().fg(Color::Reset).bg(Color::Reset);
+    let focused_style = Style::default().fg(theme.fg_invert()).bg(theme.bg_invert());
 
     processes.processes()
         .into_iter()
