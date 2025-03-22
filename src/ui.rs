@@ -176,7 +176,7 @@ fn process_list_labels(
     theme: MintakaTheme,
 ) -> impl Iterator<Item = ListItem> {
     let normal_style = theme.text_style();
-    let focused_style = theme.invert_style();
+    let focused_style = theme.highlight_style();
 
     processes
         .processes()
@@ -245,7 +245,7 @@ fn render_status_bar(processes: &Processes, area: Rect, frame: &mut Frame, theme
         })
         .collect();
 
-    frame.render_widget(Line::from(spans).style(theme.invert_style()), area);
+    frame.render_widget(Line::from(spans).style(theme.highlight_style()), area);
 }
 
 fn render_process_pane_placeholder(process_pane: &mut ProcessPane, area: Rect, frame: &mut Frame) {

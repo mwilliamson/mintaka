@@ -18,25 +18,21 @@ impl MintakaTheme {
         }
     }
 
-    fn fg_invert(&self) -> Color {
-        match self {
-            MintakaTheme::Light => Color::White,
-            MintakaTheme::Dark => Color::Black,
-        }
-    }
-
-    fn bg_invert(&self) -> Color {
-        match self {
-            MintakaTheme::Light => Color::Black,
-            MintakaTheme::Dark => Color::White,
-        }
-    }
-
     pub(super) fn text_style(&self) -> Style {
         Style::default().fg(Color::Reset).bg(Color::Reset)
     }
 
-    pub(super) fn invert_style(&self) -> Style {
-        Style::default().fg(self.fg_invert()).bg(self.bg_invert())
+    pub(super) fn highlight_style(&self) -> Style {
+        match self {
+            MintakaTheme::Light => Style::default().fg(Color::White).bg(Color::Black),
+            MintakaTheme::Dark => Style::default().fg(Color::Black).bg(Color::White),
+        }
+    }
+
+    pub(super) fn muted_highlight_style(&self) -> Style {
+        match self {
+            MintakaTheme::Light => Style::default().fg(Color::White).bg(Color::DarkGray),
+            MintakaTheme::Dark => Style::default().fg(Color::Black).bg(Color::Gray),
+        }
     }
 }
