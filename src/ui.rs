@@ -74,7 +74,7 @@ fn render_chrome(processes: &Processes, process_pane: &mut ProcessPane, frame: &
 
     render_focus(processes, left_layout[1], frame);
 
-    render_process_pane(process_pane, layout[1], frame);
+    render_process_pane_placeholder(process_pane, layout[1], frame);
 }
 
 fn process_list_width(processes: &Processes) -> usize {
@@ -183,7 +183,7 @@ fn render_focus(processes: &Processes, area: Rect, frame: &mut Frame) {
     );
 }
 
-fn render_process_pane(process_pane: &mut ProcessPane, area: Rect, frame: &mut Frame) {
+fn render_process_pane_placeholder(process_pane: &mut ProcessPane, area: Rect, frame: &mut Frame) {
     // TODO: render directly?
     frame.render_widget(process_pane, area);
 }
