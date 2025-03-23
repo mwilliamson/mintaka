@@ -1,5 +1,9 @@
 # Changelog
 
+# 0.4.0
+
+* Support sending input to process.
+
 # 0.3.0
 
 * Detect the background of the terminal and adjust the styling accordingly.
