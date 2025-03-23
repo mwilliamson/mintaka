@@ -18,7 +18,7 @@ use termwiz::{
 use theme::MintakaTheme;
 use wezterm_term::CellAttributes;
 
-use crate::processes::{ProcessStatus, Processes};
+use crate::processes::{MintakaMode, ProcessStatus, Processes};
 
 mod controls;
 mod theme;
@@ -65,7 +65,7 @@ impl MintakaUi {
 
     pub(crate) fn poll_input(
         &mut self,
-        entered: bool,
+        mode: MintakaMode,
     ) -> Result<Option<MintakaInputEvent>, termwiz::Error> {
         let buffered_terminal = self.terminal.backend_mut().buffered_terminal_mut();
         let input_event = buffered_terminal.terminal().poll_input(None)?;
@@ -79,7 +79,7 @@ impl MintakaUi {
                 Ok(None)
             }
 
-            Some(InputEvent::Key(key_event)) => Ok(controls::read_key_event(key_event, entered)),
+            Some(InputEvent::Key(key_event)) => Ok(controls::read_key_event(key_event, mode)),
 
             _ => Ok(None),
         }

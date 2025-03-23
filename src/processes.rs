@@ -7,24 +7,42 @@ use termwiz::{
     input::KeyEvent,
     terminal::TerminalWaker,
 };
-use wezterm_term::{TerminalSize, VisibleRowIndex};
+use wezterm_term::{Screen, TerminalSize, VisibleRowIndex};
 
 use crate::{config::ProcessConfig, process_statuses::ProcessStatusAnalyzer};
 
 type SharedPtySystem = Arc<Box<dyn PtySystem + Send>>;
+
+pub(crate) enum ScrollDirection {
+    Up,
+    Down,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum MintakaMode {
+    /// The main mode, allowing focus to be manually or automatically switched
+    /// between each process.
+    Main,
+
+    /// Any input to Mintaka should be forwarded to the focused process, with
+    /// the exception of the input to stop forwarding input.
+    ///
+    /// TODO: how does a user send the key sequence to leave the process to the
+    /// process?
+    ForwardInputToFocusedProcess,
+
+    /// Scroll through the history of the process.
+    History,
+}
 
 pub(crate) struct Processes {
     /// Whether the user has enabled autofocus. Autofocus may be suspended, for
     /// instance while a process is entered.
     autofocus_enabled: bool,
 
-    /// Whether the focused process has been entered. If so, any input to
-    /// Mintaka should be forwarded to the entered process, with the exception
-    /// of the input to leave the process.
-    ///
-    /// TODO: how does a user send the key sequence to leave the process to the
-    /// process?
-    entered: bool,
+    mode: MintakaMode,
+
+    snapshot: Option<ProcessSnapshot>,
 
     pty_system: SharedPtySystem,
 
@@ -51,7 +69,8 @@ impl Processes {
 
         Self {
             autofocus_enabled: true,
-            entered: false,
+            mode: MintakaMode::Main,
+            snapshot: None,
             pty_system,
             pty_size,
             processes: Vec::new(),
@@ -73,21 +92,43 @@ impl Processes {
         self.autofocus_enabled
     }
 
-    pub(crate) fn enter_focused_process(&mut self) {
-        self.entered = true;
+    pub(crate) fn forward_input_to_focused_process(&mut self) {
+        self.mode = MintakaMode::ForwardInputToFocusedProcess;
     }
 
-    pub(crate) fn leave_focused_process(&mut self) {
-        self.entered = false;
+    pub(crate) fn enter_main_mode(&mut self) {
+        self.mode = MintakaMode::Main;
     }
 
-    pub(crate) fn entered(&self) -> bool {
-        self.entered
+    pub(crate) fn scroll(&mut self, direction: ScrollDirection) {
+        self.mode = MintakaMode::History;
+        // self.processes[self.focused_process_index].scroll(direction)
+
+        if self.snapshot.is_none() {
+            self.snapshot = Some(self.processes[self.focused_process_index].snapshot());
+        }
+
+        if let Some(snapshot) = &mut self.snapshot {
+            snapshot.scroll(direction);
+        }
+    }
+
+    pub(crate) fn leave_history(&mut self) {
+        self.mode = MintakaMode::Main;
+        self.snapshot = None;
+        // self.processes[self.focused_process_index].reset_scroll()
+    }
+
+    pub(crate) fn mode(&self) -> MintakaMode {
+        self.mode
     }
 
     /// Whether autofocus should currently be used.
     fn should_autofocus(&self) -> bool {
-        self.autofocus_enabled && !self.entered
+        match self.mode {
+            MintakaMode::Main => self.autofocus_enabled,
+            MintakaMode::ForwardInputToFocusedProcess | MintakaMode::History => false,
+        }
     }
 
     pub(crate) fn start_process(
@@ -162,7 +203,11 @@ impl Processes {
     }
 
     pub(crate) fn lines(&self) -> Vec<wezterm_term::Line> {
-        self.processes[self.focused_process_index].lines()
+        if let Some(snapshot) = &self.snapshot {
+            snapshot.lines()
+        } else {
+            self.processes[self.focused_process_index].lines()
+        }
     }
 
     pub(crate) fn move_focus_up(&mut self) {
@@ -401,14 +446,29 @@ impl Process {
         }
     }
 
-    pub(crate) fn send_input(&self, input: KeyEvent) {
+    fn send_input(&self, input: KeyEvent) {
+        if let Some(instance) = self.instance() {
+            instance.send_input(input);
+        }
+    }
+
+    fn snapshot(&self) -> ProcessSnapshot {
+        if let Some(instance) = self.instance() {
+            instance.snapshot()
+        } else {
+            ProcessSnapshot {
+                line_index: 0,
+                screen: None,
+            }
+        }
+    }
+
+    fn instance(&self) -> Option<&ProcessInstance> {
         match &self.instance_state {
             ProcessInstanceState::NotStarted
             | ProcessInstanceState::WaitingForUpstream
-            | ProcessInstanceState::PendingRestart => {}
-            ProcessInstanceState::Running { instance, .. } => {
-                instance.send_input(input);
-            }
+            | ProcessInstanceState::PendingRestart => None,
+            ProcessInstanceState::Running { instance, .. } => Some(instance),
         }
     }
 }
@@ -603,6 +663,15 @@ impl ProcessInstance {
         let _ = terminal.key_down(input.key, input.modifiers);
         let _ = terminal.key_up(input.key, input.modifiers);
     }
+
+    fn snapshot(&self) -> ProcessSnapshot {
+        let terminal = self.terminal.lock().unwrap();
+        let screen = terminal.screen().clone();
+        ProcessSnapshot {
+            line_index: screen.phys_row(0),
+            screen: Some(screen),
+        }
+    }
 }
 
 #[allow(dead_code)]
@@ -619,5 +688,38 @@ struct ProcessTerminal;
 impl wezterm_term::TerminalConfiguration for ProcessTerminal {
     fn color_palette(&self) -> wezterm_term::color::ColorPalette {
         wezterm_term::color::ColorPalette::default()
+    }
+}
+
+struct ProcessSnapshot {
+    line_index: usize,
+
+    screen: Option<Screen>,
+}
+
+impl ProcessSnapshot {
+    fn lines(&self) -> Vec<wezterm_term::Line> {
+        if let Some(screen) = &self.screen {
+            screen.lines_in_phys_range(self.line_index..(self.line_index + screen.physical_rows))
+        } else {
+            vec![]
+        }
+    }
+
+    fn scroll(&mut self, direction: ScrollDirection) {
+        if let Some(screen) = &self.screen {
+            let scroll_distance = screen.physical_rows / 2;
+            match direction {
+                ScrollDirection::Up => {
+                    self.line_index = self.line_index.saturating_sub(scroll_distance);
+                }
+                ScrollDirection::Down => {
+                    self.line_index = self
+                        .line_index
+                        .saturating_add(scroll_distance)
+                        .min(screen.phys_row(0));
+                }
+            }
+        }
     }
 }

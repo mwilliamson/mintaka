@@ -1,12 +1,15 @@
 use termwiz::input::KeyEvent;
 use wezterm_term::{KeyCode, KeyModifiers};
 
-use crate::Processes;
+use crate::{Processes, processes::MintakaMode};
 
 pub(crate) enum MintakaInputEvent {
     ToggleAutofocus,
     FocusProcessUp,
     FocusProcessDown,
+    ScrollUp,
+    ScrollDown,
+    LeaveHistory,
     RestartProcess,
     EnterProcess,
     LeaveProcess,
@@ -16,37 +19,41 @@ pub(crate) enum MintakaInputEvent {
 }
 
 pub(super) fn describe(processes: &Processes) -> Vec<(&str, &str)> {
-    if processes.entered() {
-        vec![("^e", "Leave process")]
-    } else {
-        let autofocus_str = if processes.autofocus_enabled() {
-            "Autofocus (On) "
-        } else {
-            "Autofocus (Off)"
-        };
+    match processes.mode() {
+        crate::processes::MintakaMode::Main => {
+            let autofocus_str = if processes.autofocus_enabled() {
+                "Autofocus (On) "
+            } else {
+                "Autofocus (Off)"
+            };
 
-        vec![
-            (" a", autofocus_str),
-            ("↑↓", "Focus process"),
-            (" r", "Restart process"),
-            ("^e", "Enter process"),
-            ("^c", "Quit"),
-        ]
+            vec![
+                (" a", autofocus_str),
+                ("↑↓", "Focus process"),
+                ("PgUp", "Scroll up"),
+                (" r", "Restart process"),
+                ("^e", "Enter process"),
+                ("^c", "Quit"),
+            ]
+        }
+
+        crate::processes::MintakaMode::ForwardInputToFocusedProcess => {
+            vec![("^e", "Leave process")]
+        }
+
+        crate::processes::MintakaMode::History => {
+            vec![
+                ("^e", "Leave history"),
+                ("PgUp", "Scroll up"),
+                ("PgDown", "Scroll down"),
+            ]
+        }
     }
 }
 
-pub(super) fn read_key_event(key_event: KeyEvent, entered: bool) -> Option<MintakaInputEvent> {
-    if entered {
-        match key_event {
-            KeyEvent {
-                key: KeyCode::Char('e'),
-                modifiers: KeyModifiers::CTRL,
-            } => Some(MintakaInputEvent::LeaveProcess),
-
-            _ => Some(MintakaInputEvent::SendToFocusedProcess(key_event)),
-        }
-    } else {
-        match key_event {
+pub(super) fn read_key_event(key_event: KeyEvent, mode: MintakaMode) -> Option<MintakaInputEvent> {
+    match mode {
+        MintakaMode::Main => match key_event {
             KeyEvent {
                 key: KeyCode::Char('a'),
                 modifiers: KeyModifiers::NONE,
@@ -61,6 +68,11 @@ pub(super) fn read_key_event(key_event: KeyEvent, entered: bool) -> Option<Minta
                 key: KeyCode::DownArrow,
                 modifiers: KeyModifiers::NONE,
             } => Some(MintakaInputEvent::FocusProcessDown),
+
+            KeyEvent {
+                key: KeyCode::PageUp,
+                modifiers: KeyModifiers::NONE,
+            } => Some(MintakaInputEvent::ScrollUp),
 
             KeyEvent {
                 key: KeyCode::Char('r'),
@@ -78,6 +90,34 @@ pub(super) fn read_key_event(key_event: KeyEvent, entered: bool) -> Option<Minta
             } => Some(MintakaInputEvent::Quit),
 
             _ => None,
-        }
+        },
+
+        MintakaMode::ForwardInputToFocusedProcess => match key_event {
+            KeyEvent {
+                key: KeyCode::Char('e'),
+                modifiers: KeyModifiers::CTRL,
+            } => Some(MintakaInputEvent::LeaveProcess),
+
+            _ => Some(MintakaInputEvent::SendToFocusedProcess(key_event)),
+        },
+
+        MintakaMode::History => match key_event {
+            KeyEvent {
+                key: KeyCode::Char('e'),
+                modifiers: KeyModifiers::CTRL,
+            } => Some(MintakaInputEvent::LeaveHistory),
+
+            KeyEvent {
+                key: KeyCode::PageUp,
+                modifiers: KeyModifiers::NONE,
+            } => Some(MintakaInputEvent::ScrollUp),
+
+            KeyEvent {
+                key: KeyCode::PageDown,
+                modifiers: KeyModifiers::NONE,
+            } => Some(MintakaInputEvent::ScrollDown),
+
+            _ => None,
+        },
     }
 }

@@ -4,6 +4,8 @@
 
 * Support sending input to process.
 
+* Support scrolling through history.
+
 # 0.3.0
 
 * Detect the background of the terminal and adjust the styling accordingly.
