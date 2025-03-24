@@ -28,6 +28,8 @@ pub(crate) use controls::MintakaInputEvent;
 pub(crate) struct MintakaUi {
     terminal: ratatui::Terminal<TermwizBackend>,
 
+    process_list_state: ListState,
+
     theme: MintakaTheme,
 }
 
@@ -48,7 +50,13 @@ impl MintakaUi {
             ratatui::Terminal::new(TermwizBackend::with_buffered_terminal(buffered_terminal))
                 .unwrap();
 
-        Self { terminal, theme }
+        let process_list_state = ListState::default();
+
+        Self {
+            terminal,
+            process_list_state,
+            theme,
+        }
     }
 
     pub(crate) fn waker(&mut self) -> TerminalWaker {
@@ -60,7 +68,12 @@ impl MintakaUi {
     }
 
     pub(crate) fn render(&mut self, processes: &Arc<Mutex<Processes>>) {
-        render_ui(processes, &mut self.terminal, self.theme)
+        render_ui(
+            processes,
+            &mut self.terminal,
+            &mut self.process_list_state,
+            self.theme,
+        )
     }
 
     pub(crate) fn poll_input(
@@ -105,6 +118,7 @@ impl MintakaUi {
 fn render_ui(
     processes: &Arc<Mutex<Processes>>,
     terminal: &mut ratatui::Terminal<TermwizBackend>,
+    process_list_state: &mut ListState,
     theme: MintakaTheme,
 ) {
     let mut processes = processes.lock().unwrap();
@@ -112,7 +126,13 @@ fn render_ui(
 
     terminal
         .draw(|frame| {
-            render_chrome(&processes, &mut process_pane, frame, theme);
+            render_chrome(
+                &processes,
+                &mut process_pane,
+                frame,
+                process_list_state,
+                theme,
+            );
         })
         .unwrap();
 
@@ -131,6 +151,7 @@ fn render_chrome(
     processes: &Processes,
     process_pane: &mut ProcessPane,
     frame: &mut Frame,
+    process_list_state: &mut ListState,
     theme: MintakaTheme,
 ) {
     let layout = Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]).split(frame.size());
@@ -141,7 +162,7 @@ fn render_chrome(
     ])
     .split(layout[0]);
 
-    render_process_list(processes, top_layout[0], frame, theme);
+    render_process_list(processes, top_layout[0], frame, process_list_state, theme);
 
     render_status_bar(processes, layout[1], frame, theme);
 
@@ -161,13 +182,17 @@ fn process_list_width(processes: &Processes, theme: MintakaTheme) -> usize {
     label_width + border_width * 2
 }
 
-fn render_process_list(processes: &Processes, area: Rect, frame: &mut Frame, theme: MintakaTheme) {
+fn render_process_list(
+    processes: &Processes,
+    area: Rect,
+    frame: &mut Frame,
+    process_list_state: &mut ListState,
+    theme: MintakaTheme,
+) {
+    process_list_state.select(Some(processes.focused_process_index));
     let process_labels = process_list_labels(processes, theme);
     let process_list = List::new(process_labels).block(Block::bordered());
-    // TODO: maintain list state
-    let mut process_list_state =
-        ListState::default().with_selected(Some(processes.focused_process_index));
-    frame.render_stateful_widget(&process_list, area, &mut process_list_state);
+    frame.render_stateful_widget(&process_list, area, process_list_state);
 }
 
 const STATUS_COLOR_SUCCESS: Color = Color::Green;
