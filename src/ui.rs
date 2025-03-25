@@ -12,7 +12,7 @@ use ratatui::{
 use termwiz::{
     caps::ProbeHints,
     input::InputEvent,
-    surface::{Change, Surface},
+    surface::{Change, CursorVisibility, Surface},
     terminal::{SystemTerminal, Terminal, TerminalWaker, buffered::BufferedTerminal},
 };
 use theme::MintakaTheme;
@@ -286,7 +286,10 @@ fn render_process_pane<T: Terminal>(
     process_pane: &ProcessPane,
     buffered_terminal: &mut BufferedTerminal<T>,
 ) {
+    // TODO: combine lines and cursor position into one call
     let lines = processes.lines();
+    let cursor_position = processes.cursor_position();
+
     let mut process_surface = Surface::new(
         process_pane.area.width.into(),
         process_pane.area.height.into(),
@@ -309,6 +312,23 @@ fn render_process_pane<T: Terminal>(
         process_pane.area.x.into(),
         process_pane.area.y.into(),
     );
+
+    if let Some(cursor_position) = cursor_position {
+        // TODO: check cursor_position (e.g. visibility)
+        buffered_terminal.add_change(Change::CursorVisibility(CursorVisibility::Visible));
+        // TODO: handle negative y
+        buffered_terminal.add_change(Change::CursorPosition {
+            x: termwiz::surface::Position::Absolute(
+                cursor_position.x + process_pane.area.x as usize,
+            ),
+            y: termwiz::surface::Position::Absolute(
+                cursor_position.y.max(0) as usize + process_pane.area.y as usize,
+            ),
+        });
+    } else {
+        buffered_terminal.add_change(Change::CursorVisibility(CursorVisibility::Hidden));
+    }
+
     buffered_terminal.flush().unwrap();
 }
 

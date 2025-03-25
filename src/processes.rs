@@ -7,7 +7,7 @@ use termwiz::{
     input::KeyEvent,
     terminal::TerminalWaker,
 };
-use wezterm_term::{Screen, TerminalSize, VisibleRowIndex};
+use wezterm_term::{CursorPosition, Screen, TerminalSize, VisibleRowIndex};
 
 use crate::{config::ProcessConfig, process_statuses::ProcessStatusAnalyzer};
 
@@ -205,6 +205,14 @@ impl Processes {
             snapshot.lines()
         } else {
             self.processes[self.focused_process_index].lines()
+        }
+    }
+
+    pub(crate) fn cursor_position(&self) -> Option<CursorPosition> {
+        if matches!(self.mode, MintakaMode::ForwardInputToFocusedProcess) {
+            self.processes[self.focused_process_index].cursor_position()
+        } else {
+            None
         }
     }
 
@@ -444,6 +452,14 @@ impl Process {
         }
     }
 
+    fn cursor_position(&self) -> Option<CursorPosition> {
+        if let Some(instance) = self.instance() {
+            instance.cursor_position()
+        } else {
+            None
+        }
+    }
+
     fn send_input(&self, input: KeyEvent) {
         if let Some(instance) = self.instance() {
             instance.send_input(input);
@@ -655,6 +671,11 @@ impl ProcessInstance {
             .lines_in_phys_range(terminal.screen().phys_range(&(0..VisibleRowIndex::MAX)))
     }
 
+    fn cursor_position(&self) -> Option<CursorPosition> {
+        let terminal = self.terminal.lock().unwrap();
+        Some(terminal.cursor_pos())
+    }
+
     fn send_input(&self, input: KeyEvent) {
         let mut terminal = self.terminal.lock().unwrap();
         // TODO: handle errors
@@ -665,6 +686,7 @@ impl ProcessInstance {
     fn snapshot(&self) -> ProcessSnapshot {
         let terminal = self.terminal.lock().unwrap();
         let screen = terminal.screen().clone();
+
         ProcessSnapshot {
             line_index: screen.phys_row(0),
             screen: Some(screen),
