@@ -300,6 +300,17 @@ impl ProcessStatus {
             ProcessStatus::Exited { exit_code } => *exit_code == 0,
         }
     }
+
+    fn is_running(&self) -> bool {
+        match self {
+            ProcessStatus::NotStarted => false,
+            ProcessStatus::WaitingForUpstream => false,
+            ProcessStatus::Running => true,
+            ProcessStatus::Success => true,
+            ProcessStatus::Errors { .. } => true,
+            ProcessStatus::Exited { .. } => false,
+        }
+    }
 }
 
 enum ProcessInstanceState {
@@ -453,6 +464,10 @@ impl Process {
     }
 
     fn cursor_position(&self) -> Option<CursorPosition> {
+        if !self.status().is_running() {
+            return None;
+        }
+
         if let Some(instance) = self.instance() {
             instance.cursor_position()
         } else {
