@@ -102,7 +102,6 @@ impl Processes {
 
     pub(crate) fn scroll(&mut self, direction: ScrollDirection) {
         self.mode = MintakaMode::History;
-        // self.processes[self.focused_process_index].scroll(direction)
 
         if self.snapshot.is_none() {
             self.snapshot = Some(self.processes[self.focused_process_index].snapshot());
@@ -116,7 +115,6 @@ impl Processes {
     pub(crate) fn leave_history(&mut self) {
         self.mode = MintakaMode::Main;
         self.snapshot = None;
-        // self.processes[self.focused_process_index].reset_scroll()
     }
 
     pub(crate) fn mode(&self) -> MintakaMode {
