@@ -45,7 +45,7 @@ pub(super) fn describe(processes: &Processes) -> Vec<(&str, &str)> {
             vec![
                 ("^e", "Leave history"),
                 ("PgUp", "Scroll up"),
-                ("PgDown", "Scroll down"),
+                ("PgDn", "Scroll down"),
             ]
         }
     }
