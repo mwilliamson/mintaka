@@ -313,12 +313,17 @@ fn render_process_pane<T: Terminal>(
         process_pane.area.y.into(),
     );
 
-    if let Some((cursor_x, cursor_y)) = cursor_position.and_then(|cursor_position| {
-        let x = cursor_position.x;
-        let y: Option<usize> = cursor_position.y.try_into().ok();
-        y.map(|y| (x, y))
-    }) {
-        // TODO: check cursor_position (e.g. visibility)
+    if let Some((cursor_x, cursor_y)) = cursor_position
+        .filter(|cursor_position| match cursor_position.visibility {
+            CursorVisibility::Hidden => false,
+            CursorVisibility::Visible => true,
+        })
+        .and_then(|cursor_position| {
+            let x = cursor_position.x;
+            let y: Option<usize> = cursor_position.y.try_into().ok();
+            y.map(|y| (x, y))
+        })
+    {
         buffered_terminal.add_change(Change::CursorVisibility(CursorVisibility::Visible));
         buffered_terminal.add_change(Change::CursorPosition {
             x: termwiz::surface::Position::Absolute(cursor_x + process_pane.area.x as usize),
