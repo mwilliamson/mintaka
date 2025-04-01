@@ -407,6 +407,7 @@ impl Process {
         let previous_instance_state =
             std::mem::replace(&mut self.instance_state, new_process_instance_state);
         if let ProcessInstanceState::Running { mut instance, .. } = previous_instance_state {
+            // TODO: handle killing taking an unexpectedly long time.
             instance.kill();
         }
     }
