@@ -225,6 +225,7 @@ fn process_list_labels(
 
             let (status_str, status_color) = match process.status() {
                 ProcessStatus::NotStarted => ("INACTIVE".to_owned(), STATUS_COLOR_OTHER),
+                ProcessStatus::Stopped => ("STOPPED".to_owned(), STATUS_COLOR_OTHER),
                 ProcessStatus::WaitingForUpstream => ("WAITING".to_owned(), STATUS_COLOR_OTHER),
                 ProcessStatus::Running => ("RUNNING".to_owned(), STATUS_COLOR_OTHER),
                 ProcessStatus::Success => ("SUCCESS".to_owned(), STATUS_COLOR_SUCCESS),

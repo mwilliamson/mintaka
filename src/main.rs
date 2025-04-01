@@ -37,6 +37,8 @@ fn main() {
 
         match ui.poll_input(mode).unwrap() {
             Some(MintakaInputEvent::Quit) => {
+                let mut processes = processes.lock().unwrap();
+                processes.stop_all();
                 return;
             }
             Some(MintakaInputEvent::FocusProcessUp) => {

@@ -151,6 +151,13 @@ impl Processes {
         Ok(())
     }
 
+    pub(crate) fn stop_all(&mut self) {
+        // TODO: prevent processes from automatically restarting after stopping.
+        for process in &mut self.processes {
+            process.stop();
+        }
+    }
+
     pub(crate) fn do_work(&mut self) -> Result<(), ProcessError> {
         self.handle_status_updates();
 
@@ -262,6 +269,9 @@ pub(crate) enum ProcessStatus {
     /// The process has not been started.
     NotStarted,
 
+    /// This process has been stopped, and will not be automatically started.
+    Stopped,
+
     /// The process will run once an upstream process reaches a success state.
     WaitingForUpstream,
 
@@ -282,6 +292,7 @@ impl ProcessStatus {
     fn is_failure(&self) -> bool {
         match self {
             ProcessStatus::NotStarted => false,
+            ProcessStatus::Stopped => false,
             ProcessStatus::WaitingForUpstream => false,
             ProcessStatus::Running => false,
             ProcessStatus::Success => false,
@@ -293,6 +304,7 @@ impl ProcessStatus {
     fn is_success(&self) -> bool {
         match self {
             ProcessStatus::NotStarted => false,
+            ProcessStatus::Stopped => false,
             ProcessStatus::WaitingForUpstream => false,
             ProcessStatus::Running => false,
             ProcessStatus::Success => true,
@@ -304,6 +316,7 @@ impl ProcessStatus {
     fn is_running(&self) -> bool {
         match self {
             ProcessStatus::NotStarted => false,
+            ProcessStatus::Stopped => false,
             ProcessStatus::WaitingForUpstream => false,
             ProcessStatus::Running => true,
             ProcessStatus::Success => true,
@@ -316,6 +329,9 @@ impl ProcessStatus {
 enum ProcessInstanceState {
     /// This process has not yet been triggered.
     NotStarted,
+
+    /// This process has been stopped, and will not be automatically started.
+    Stopped,
 
     /// This process will be triggered once an upstream process reaches a
     /// success state.
@@ -330,6 +346,14 @@ enum ProcessInstanceState {
         status: ProcessStatus,
         status_rx: std::sync::mpsc::Receiver<ProcessStatus>,
     },
+}
+
+impl ProcessInstanceState {
+    /// Whether or not the process is stopped, meaning it should not be started
+    /// automatically.
+    fn is_stopped(&self) -> bool {
+        matches!(self, Self::Stopped)
+    }
 }
 
 pub(crate) struct Process {
@@ -395,6 +419,10 @@ impl Process {
         &self.name
     }
 
+    fn stop(&mut self) {
+        self.kill(ProcessInstanceState::Stopped);
+    }
+
     fn restart(&mut self) {
         self.kill(ProcessInstanceState::PendingRestart);
     }
@@ -408,6 +436,11 @@ impl Process {
             std::mem::replace(&mut self.instance_state, new_process_instance_state);
         if let ProcessInstanceState::Running { mut instance, .. } = previous_instance_state {
             // TODO: handle killing taking an unexpectedly long time.
+            // TODO: wezterm seems to different code paths depending on whether
+            // the ChildKiller impl is std::process::Child or ProcessSignaller.
+            // We should figure out which we have, and adjust accordingly
+            // (e.g. on Unix, ProcessSignaller we just send SIGHUP, so don't
+            // guarantee the process is killed)
             instance.kill();
         }
     }
@@ -415,6 +448,7 @@ impl Process {
     fn handle_status_updates(&mut self) -> Option<ProcessStatus> {
         match &mut self.instance_state {
             ProcessInstanceState::NotStarted
+            | ProcessInstanceState::Stopped
             | ProcessInstanceState::WaitingForUpstream
             | ProcessInstanceState::PendingRestart => None,
             ProcessInstanceState::Running {
@@ -449,6 +483,7 @@ impl Process {
     pub(crate) fn status(&self) -> ProcessStatus {
         match &self.instance_state {
             ProcessInstanceState::NotStarted => ProcessStatus::NotStarted,
+            ProcessInstanceState::Stopped => ProcessStatus::Stopped,
             ProcessInstanceState::WaitingForUpstream => ProcessStatus::WaitingForUpstream,
             ProcessInstanceState::PendingRestart => ProcessStatus::Running,
             ProcessInstanceState::Running { status, .. } => *status,
@@ -458,6 +493,7 @@ impl Process {
     fn lines(&self) -> Vec<wezterm_term::Line> {
         match &self.instance_state {
             ProcessInstanceState::NotStarted
+            | ProcessInstanceState::Stopped
             | ProcessInstanceState::WaitingForUpstream
             | ProcessInstanceState::PendingRestart => Vec::new(),
             ProcessInstanceState::Running { instance, .. } => instance.lines(),
@@ -496,6 +532,7 @@ impl Process {
     fn instance(&self) -> Option<&ProcessInstance> {
         match &self.instance_state {
             ProcessInstanceState::NotStarted
+            | ProcessInstanceState::Stopped
             | ProcessInstanceState::WaitingForUpstream
             | ProcessInstanceState::PendingRestart => None,
             ProcessInstanceState::Running { instance, .. } => Some(instance),
