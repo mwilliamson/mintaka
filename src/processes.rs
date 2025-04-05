@@ -9,7 +9,10 @@ use termwiz::{
 };
 use wezterm_term::{CursorPosition, Screen, TerminalSize, VisibleRowIndex};
 
-use crate::{config::ProcessConfig, process_statuses::ProcessStatusAnalyzer};
+use crate::{
+    config::ProcessConfig,
+    process_statuses::{LineAnalysis, ProcessStatusAnalyzer},
+};
 
 type SharedPtySystem = Arc<Box<dyn PtySystem + Send>>;
 
@@ -709,9 +712,16 @@ impl ProcessInstance {
                             | termwiz::escape::ControlCode::CarriageReturn,
                         )
                         | termwiz::escape::Action::Esc(Esc::Code(EscCode::FullReset)) => {
-                            if let Some(new_status) =
+                            if let Some(line_analysis) =
                                 process_status_analyzer.analyze_line(&last_line)
                             {
+                                let new_status = match line_analysis {
+                                    LineAnalysis::Running => ProcessStatus::Running,
+                                    LineAnalysis::Success => ProcessStatus::Success,
+                                    LineAnalysis::Errors { error_count } => {
+                                        ProcessStatus::Errors { error_count }
+                                    }
+                                };
                                 let _ = status_tx.send(new_status);
                             }
 
