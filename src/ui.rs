@@ -16,7 +16,7 @@ use termwiz::{
     terminal::{SystemTerminal, Terminal, TerminalWaker, buffered::BufferedTerminal},
 };
 use theme::MintakaTheme;
-use wezterm_term::CellAttributes;
+use wezterm_term::{CellAttributes, CursorPosition};
 
 use crate::processes::{MintakaMode, ProcessStatus, Processes};
 
@@ -313,8 +313,21 @@ fn render_process_pane<T: Terminal>(
         process_pane.area.y.into(),
     );
 
-    if let Some((cursor_x, cursor_y)) = screen_contents
-        .cursor_position
+    render_cursor(
+        &screen_contents.cursor_position,
+        process_pane,
+        buffered_terminal,
+    );
+
+    buffered_terminal.flush().unwrap();
+}
+
+fn render_cursor<T: Terminal>(
+    cursor_position: &Option<CursorPosition>,
+    process_pane: &ProcessPane,
+    buffered_terminal: &mut BufferedTerminal<T>,
+) {
+    if let Some((cursor_x, cursor_y)) = cursor_position
         .filter(|cursor_position| match cursor_position.visibility {
             CursorVisibility::Hidden => false,
             CursorVisibility::Visible => true,
@@ -333,8 +346,6 @@ fn render_process_pane<T: Terminal>(
     } else {
         buffered_terminal.add_change(Change::CursorVisibility(CursorVisibility::Hidden));
     }
-
-    buffered_terminal.flush().unwrap();
 }
 
 struct ProcessPane {
