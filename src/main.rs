@@ -24,7 +24,7 @@ fn main() {
             let mut processes_locked = processes.lock().unwrap();
             processes_locked.do_work().unwrap();
 
-            if processes_locked.stopped() {
+            if processes_locked.is_stopped() {
                 return;
             }
         }

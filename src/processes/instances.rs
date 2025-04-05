@@ -1,6 +1,12 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    sync::{
+        Arc, Mutex,
+        atomic::{self, AtomicBool},
+    },
+    time::Duration,
+};
 
-use portable_pty::{ChildKiller, ExitStatus, PtyPair, PtySize};
+use portable_pty::{ExitStatus, PtyPair, PtySize};
 use termwiz::{
     escape::{Esc, EscCode, parser::Parser},
     input::KeyEvent,
@@ -41,7 +47,8 @@ impl ProcessInstanceId {
 pub(super) struct ProcessInstance {
     terminal: Arc<Mutex<wezterm_term::Terminal>>,
     pty_master: Box<dyn portable_pty::MasterPty>,
-    child_process_killer: Box<dyn ChildKiller + Send + Sync>,
+    has_terminated: Arc<AtomicBool>,
+    process_id: u32,
 }
 
 impl ProcessInstance {
@@ -58,7 +65,7 @@ impl ProcessInstance {
             .slave
             .spawn_command(pty_command)
             .map_err(ProcessError::SpawnCommandFailed)?;
-        let child_process_killer = child_process.clone_killer();
+        let process_id = child_process.process_id().expect("Process has no ID");
         std::mem::drop(pty_pair.slave);
 
         let pty_size = pty_pair.master.get_size().unwrap();
@@ -68,6 +75,8 @@ impl ProcessInstance {
             pty_size,
         )));
 
+        let has_terminated = Arc::new(AtomicBool::new(false));
+
         let child_process_reader = pty_pair.master.try_clone_reader().unwrap();
         Self::spawn_process_reader(
             process_config.process_status_analyzer(),
@@ -76,13 +85,15 @@ impl ProcessInstance {
             Arc::clone(&terminal),
             on_change,
             status_tx,
+            Arc::clone(&has_terminated),
             process_instance_id,
         );
 
         Ok(Self {
             terminal,
             pty_master: pty_pair.master,
-            child_process_killer,
+            process_id,
+            has_terminated,
         })
     }
 
@@ -135,6 +146,7 @@ impl ProcessInstance {
         terminal: Arc<Mutex<wezterm_term::Terminal>>,
         on_change: TerminalWaker,
         status_tx: std::sync::mpsc::Sender<ProcessStatus>,
+        has_terminated: Arc<AtomicBool>,
         process_instance_id: ProcessInstanceId,
     ) {
         std::thread::spawn(move || {
@@ -153,6 +165,8 @@ impl ProcessInstance {
                     let exit_code = child_process
                         .wait()
                         .unwrap_or(ExitStatus::with_exit_code(1));
+
+                    has_terminated.store(true, atomic::Ordering::Relaxed);
 
                     let new_status = ProcessStatus::Exited {
                         exit_code: exit_code.exit_code(),
@@ -209,13 +223,29 @@ impl ProcessInstance {
     }
 
     pub(super) fn kill(&mut self) {
-        // Failures to kill are (hopefully) because the process has already
-        // stopped. We could check the status of the child process, but this
-        // may lead to a race condition.
-        //
-        // We could check the error we get back, but since the kind is
-        // `Uncategorized`, we'd need to check the message which feels fragile.
-        let _ = self.child_process_killer.kill();
+        if self.has_terminated.load(atomic::Ordering::Relaxed) {
+            return;
+        }
+
+        // There is a potential race condition in that the the process might
+        // terminate between after having checked whether it has terminated, or
+        // that the termination has not yet been handled. However, given this
+        // mean the kill happens almost immediately after the process
+        // terminates, there should be a low chance that the PID has been
+        // reused.
+
+        kill_sigterm(self.process_id);
+
+        let process_id = self.process_id;
+        let has_terminated = Arc::clone(&self.has_terminated);
+
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_secs(5));
+            if has_terminated.load(atomic::Ordering::Relaxed) {
+                return;
+            }
+            kill_sigkill(process_id);
+        });
     }
 
     pub(super) fn resize(&mut self, pty_size: PtySize) {
@@ -265,4 +295,34 @@ impl wezterm_term::TerminalConfiguration for ProcessTerminal {
     fn color_palette(&self) -> wezterm_term::color::ColorPalette {
         wezterm_term::color::ColorPalette::default()
     }
+}
+
+#[cfg(unix)]
+fn kill_sigterm(process_id: u32) {
+    let result = unsafe { libc::kill(process_id as i32, libc::SIGTERM) };
+    if result != 0 {
+        // TODO: handle error
+    }
+}
+
+#[cfg(unix)]
+fn kill_sigkill(process_id: u32) {
+    let result = unsafe { libc::kill(process_id as i32, libc::SIGKILL) };
+    if result != 0 {
+        // TODO: handle error
+    }
+}
+
+#[cfg(windows)]
+fn kill_sigterm(process_id: u32) {
+    // There's no equivalent to SIGTERM on win32 (so far as I know?), so we just
+    // resort directly to the equivalent of SIGKILL.
+    kill_sigkill(process_id);
+}
+
+#[cfg(windows)]
+fn kill_sigkill(process_id: u32) {
+    // TODO: handle errors
+    let handle = unsafe { winapi::um::processthreadsapi::OpenProcess(winapi::um::winnt::PROCESS_TERMINATE, 0, process_id) };
+    unsafe { winapi::um::processthreadsapi::TerminateProcess(handle, 127) };
 }

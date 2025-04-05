@@ -264,6 +264,8 @@ fn process_list_labels(
                     };
                     (format!("EXIT {exit_code}"), status_color)
                 }
+                ProcessStatus::Restarting => ("RESTARTING".to_owned(), STATUS_COLOR_OTHER),
+                ProcessStatus::Stopping => ("STOPPING".to_owned(), STATUS_COLOR_OTHER),
             };
             let status_style = style.fg(status_color).bold();
 

@@ -172,9 +172,8 @@ impl Processes {
     }
 
     /// Whether or not all processes have stopped.
-    pub(crate) fn stopped(&self) -> bool {
-        self.processes.iter().all(|process| process.stopped())
-
+    pub(crate) fn is_stopped(&self) -> bool {
+        self.processes.iter().all(|process| process.is_stopped())
     }
 
     pub(crate) fn do_work(&mut self) -> Result<(), ProcessError> {
@@ -359,6 +358,17 @@ enum ProcessInstanceState {
         status: ProcessStatus,
         status_rx: std::sync::mpsc::Receiver<ProcessStatus>,
     },
+
+    /// This process has a running instance that is being terminated.
+    Terminating {
+        // TODO: remove duplication with Running
+        instance: ProcessInstance,
+        status: ProcessStatus,
+        status_rx: std::sync::mpsc::Receiver<ProcessStatus>,
+
+        /// The state that the process should have once it has been terminated.
+        state_on_termination: Box<ProcessInstanceState>,
+    },
 }
 
 impl ProcessInstanceState {
@@ -377,6 +387,19 @@ impl ProcessInstanceState {
             ProcessInstanceState::PendingRestart => ProcessStatus::Running,
             ProcessInstanceState::FailedToStart(_) => ProcessStatus::FailedToStart,
             ProcessInstanceState::Running { status, .. } => *status,
+            ProcessInstanceState::Terminating {
+                state_on_termination,
+                ..
+            } => {
+                if matches!(
+                    state_on_termination.as_ref(),
+                    ProcessInstanceState::PendingRestart
+                ) {
+                    ProcessStatus::Restarting
+                } else {
+                    ProcessStatus::Stopping
+                }
+            }
         }
     }
 }
@@ -450,8 +473,8 @@ impl Process {
     }
 
     /// Whether or not the process has stopped.
-    fn stopped(&self) -> bool {
-        matches!(self.instance_state, ProcessInstanceState::Stopped)
+    fn is_stopped(&self) -> bool {
+        self.instance_state.is_stopped()
     }
 
     fn restart(&mut self) {
@@ -462,21 +485,36 @@ impl Process {
         self.kill(ProcessInstanceState::WaitingForUpstream);
     }
 
-    fn kill(&mut self, new_process_instance_state: ProcessInstanceState) {
-        if self.stopped() {
+    fn kill(&mut self, state_on_termination: ProcessInstanceState) {
+        if self.is_stopped() {
             return;
         }
 
         let previous_instance_state =
-            std::mem::replace(&mut self.instance_state, new_process_instance_state);
-        if let ProcessInstanceState::Running { mut instance, .. } = previous_instance_state {
-            // TODO: handle killing taking an unexpectedly long time.
-            // TODO: wezterm seems to different code paths depending on whether
-            // the ChildKiller impl is std::process::Child or ProcessSignaller.
-            // We should figure out which we have, and adjust accordingly
-            // (e.g. on Unix, ProcessSignaller we just send SIGHUP, so don't
-            // guarantee the process is killed)
+            std::mem::replace(&mut self.instance_state, ProcessInstanceState::NotStarted);
+
+        if let ProcessInstanceState::Running {
+            mut instance,
+            status,
+            status_rx,
+        }
+        | ProcessInstanceState::Terminating {
+            mut instance,
+            status,
+            status_rx,
+            ..
+        } = previous_instance_state
+        {
             instance.kill();
+
+            self.instance_state = ProcessInstanceState::Terminating {
+                instance,
+                status,
+                status_rx,
+                state_on_termination: Box::new(state_on_termination),
+            };
+        } else {
+            self.instance_state = state_on_termination;
         }
     }
 
@@ -490,6 +528,9 @@ impl Process {
             | ProcessInstanceState::FailedToStart(_) => {}
             ProcessInstanceState::Running {
                 status, status_rx, ..
+            }
+            | ProcessInstanceState::Terminating {
+                status, status_rx, ..
             } => {
                 let new_status = status_rx.try_iter().last();
 
@@ -497,6 +538,18 @@ impl Process {
                     *status = new_status;
                 }
             }
+        }
+
+        match &mut self.instance_state {
+            ProcessInstanceState::Terminating {
+                status: ProcessStatus::Exited { .. },
+                state_on_termination,
+                ..
+            } => {
+                self.instance_state =
+                    std::mem::replace(state_on_termination, ProcessInstanceState::NotStarted);
+            }
+            _ => {}
         }
     }
 
@@ -539,7 +592,8 @@ impl Process {
             | ProcessInstanceState::WaitingForUpstream
             | ProcessInstanceState::PendingRestart
             | ProcessInstanceState::FailedToStart(_) => Vec::new(),
-            ProcessInstanceState::Running { instance, .. } => instance.lines(),
+            ProcessInstanceState::Running { instance, .. }
+            | ProcessInstanceState::Terminating { instance, .. } => instance.lines(),
         }
     }
 
@@ -576,7 +630,8 @@ impl Process {
             | ProcessInstanceState::WaitingForUpstream
             | ProcessInstanceState::PendingRestart
             | ProcessInstanceState::FailedToStart(_) => None,
-            ProcessInstanceState::Running { instance, .. } => Some(instance),
+            ProcessInstanceState::Running { instance, .. }
+            | ProcessInstanceState::Terminating { instance, .. } => Some(instance),
         }
     }
 }

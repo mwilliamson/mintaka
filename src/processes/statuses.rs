@@ -25,6 +25,12 @@ pub(crate) enum ProcessStatus {
 
     /// The process has exited.
     Exited { exit_code: u32 },
+
+    /// The process is being restarted.
+    Restarting,
+
+    /// The process is being stopped.
+    Stopping,
 }
 
 /// The ID of a success.
@@ -65,6 +71,8 @@ impl ProcessStatus {
             ProcessStatus::Success(_) => false,
             ProcessStatus::Errors { .. } => true,
             ProcessStatus::Exited { exit_code } => *exit_code != 0,
+            ProcessStatus::Restarting => false,
+            ProcessStatus::Stopping => false,
         }
     }
 
@@ -78,6 +86,8 @@ impl ProcessStatus {
             ProcessStatus::Success(_) => true,
             ProcessStatus::Errors { .. } => false,
             ProcessStatus::Exited { exit_code } => *exit_code == 0,
+            ProcessStatus::Restarting => false,
+            ProcessStatus::Stopping => false,
         }
     }
 
@@ -91,6 +101,8 @@ impl ProcessStatus {
             ProcessStatus::Success(_) => true,
             ProcessStatus::Errors { .. } => true,
             ProcessStatus::Exited { .. } => false,
+            ProcessStatus::Restarting => true,
+            ProcessStatus::Stopping => true,
         }
     }
 }
