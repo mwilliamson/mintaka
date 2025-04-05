@@ -7,7 +7,7 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Stylize},
     text::{Line, Span, Text},
-    widgets::{Block, List, ListItem, ListState, Widget},
+    widgets::{Block, List, ListItem, ListState, Paragraph, Widget, Wrap},
 };
 use termwiz::{
     caps::ProbeHints,
@@ -18,7 +18,7 @@ use termwiz::{
 use theme::MintakaTheme;
 use wezterm_term::{CellAttributes, CursorPosition};
 
-use crate::processes::{MintakaMode, ProcessStatus, Processes};
+use crate::processes::{MintakaMode, ProcessStatus, Processes, ScreenContents};
 
 mod controls;
 mod theme;
@@ -124,10 +124,13 @@ fn render_ui(
     let mut processes = processes.lock().unwrap();
     let mut process_pane = ProcessPane::new();
 
+    let screen_contents = processes.screen_contents();
+
     terminal
         .draw(|frame| {
             render_chrome(
                 &processes,
+                &screen_contents,
                 &mut process_pane,
                 frame,
                 process_list_state,
@@ -142,13 +145,14 @@ fn render_ui(
         process_pane.area.height.into(),
     ));
 
-    render_process_pane(&processes, &process_pane, buffered_terminal);
+    render_process_pane(&screen_contents, &process_pane, buffered_terminal);
 }
 
 /// Render the chrome of the UI: that is, render everything except for the
 /// actual output of the process.
 fn render_chrome(
     processes: &Processes,
+    screen_contents: &ScreenContents,
     process_pane: &mut ProcessPane,
     frame: &mut Frame,
     process_list_state: &mut ListState,
@@ -166,7 +170,7 @@ fn render_chrome(
 
     render_status_bar(processes, layout[1], frame, theme);
 
-    render_process_pane_placeholder(process_pane, top_layout[1], frame);
+    render_process_pane_placeholder(screen_contents, process_pane, top_layout[1], frame);
 }
 
 fn process_list_width(processes: &Processes, theme: MintakaTheme) -> usize {
@@ -278,17 +282,44 @@ fn render_status_bar(processes: &Processes, area: Rect, frame: &mut Frame, theme
     frame.render_widget(Line::from(spans).style(theme.highlight_style()), area);
 }
 
-fn render_process_pane_placeholder(process_pane: &mut ProcessPane, area: Rect, frame: &mut Frame) {
-    // TODO: render directly?
+fn render_process_pane_placeholder(
+    screen_contents: &ScreenContents,
+    process_pane: &mut ProcessPane,
+    area: Rect,
+    frame: &mut Frame,
+) {
     frame.render_widget(process_pane, area);
+
+    match screen_contents {
+        ScreenContents::Error(error) => {
+            // Since we're rendering terminal output outside of ratatui, we need
+            // to clear the area before rendering.
+            frame.render_widget(Block::new().bg(Color::Red), area);
+            frame.render_widget(Block::new().bg(Color::Reset), area);
+
+            frame.render_widget(
+                Paragraph::new(error.to_owned()).wrap(Wrap { trim: false }),
+                area,
+            );
+        }
+        ScreenContents::Terminal { .. } => {
+            // TODO: render directly?
+        }
+    }
 }
 
 fn render_process_pane<T: Terminal>(
-    processes: &Processes,
+    screen_contents: &ScreenContents,
     process_pane: &ProcessPane,
     buffered_terminal: &mut BufferedTerminal<T>,
 ) {
-    let screen_contents = processes.screen_contents();
+    let ScreenContents::Terminal {
+        lines,
+        cursor_position,
+    } = screen_contents
+    else {
+        return;
+    };
 
     let mut process_surface = Surface::new(
         process_pane.area.width.into(),
@@ -296,7 +327,7 @@ fn render_process_pane<T: Terminal>(
     );
     process_surface.add_change(Change::ClearScreen(Default::default()));
 
-    for (line_index, line) in screen_contents.lines.iter().enumerate() {
+    for (line_index, line) in lines.iter().enumerate() {
         if line_index != 0 {
             process_surface.add_change(termwiz::surface::Change::Text("\r\n".to_owned()));
         }
@@ -313,11 +344,7 @@ fn render_process_pane<T: Terminal>(
         process_pane.area.y.into(),
     );
 
-    render_cursor(
-        &screen_contents.cursor_position,
-        process_pane,
-        buffered_terminal,
-    );
+    render_cursor(&cursor_position, process_pane, buffered_terminal);
 
     buffered_terminal.flush().unwrap();
 }

@@ -224,20 +224,11 @@ impl Processes {
         match self.mode {
             MintakaMode::Main => {
                 let process = &self.processes[self.focused_process_index];
-                let lines = process.lines();
-                ScreenContents {
-                    lines,
-                    cursor_position: None,
-                }
+                process.screen_contents().without_cursor()
             }
             MintakaMode::ForwardInputToFocusedProcess => {
                 let process = &self.processes[self.focused_process_index];
-                let lines = process.lines();
-                let cursor_position = process.cursor_position();
-                ScreenContents {
-                    lines,
-                    cursor_position,
-                }
+                process.screen_contents()
             }
             MintakaMode::History => {
                 let lines = if let Some(snapshot) = &self.snapshot {
@@ -246,7 +237,7 @@ impl Processes {
                     // TODO: warning? Or make this state unrepresentable?
                     Vec::new()
                 };
-                ScreenContents {
+                ScreenContents::Terminal {
                     lines,
                     cursor_position: None,
                 }
@@ -513,6 +504,19 @@ impl Process {
         self.instance_state.to_status()
     }
 
+    fn screen_contents(&self) -> ScreenContents {
+        if let ProcessInstanceState::FailedToStart(error) = &self.instance_state {
+            ScreenContents::Error(format!("{:?}", error))
+        } else {
+            let lines = self.lines();
+            let cursor_position = self.cursor_position();
+            ScreenContents::Terminal {
+                lines,
+                cursor_position,
+            }
+        }
+    }
+
     fn lines(&self) -> Vec<wezterm_term::Line> {
         match &self.instance_state {
             ProcessInstanceState::NotStarted
@@ -562,7 +566,25 @@ impl Process {
     }
 }
 
-pub(crate) struct ScreenContents {
-    pub(crate) lines: Vec<wezterm_term::Line>,
-    pub(crate) cursor_position: Option<CursorPosition>,
+pub(crate) enum ScreenContents {
+    Error(String),
+    Terminal {
+        lines: Vec<wezterm_term::Line>,
+        cursor_position: Option<CursorPosition>,
+    },
+}
+
+impl ScreenContents {
+    fn without_cursor(mut self) -> Self {
+        match &mut self {
+            ScreenContents::Error(_) => {}
+            ScreenContents::Terminal {
+                cursor_position, ..
+            } => {
+                *cursor_position = None;
+            }
+        }
+
+        self
+    }
 }
