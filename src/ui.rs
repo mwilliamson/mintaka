@@ -124,13 +124,10 @@ fn render_ui(
     let mut processes = processes.lock().unwrap();
     let mut process_pane = ProcessPane::new();
 
-    let screen_contents = processes.screen_contents();
-
     terminal
         .draw(|frame| {
             render_chrome(
-                &processes,
-                &screen_contents,
+                &mut processes,
                 &mut process_pane,
                 frame,
                 process_list_state,
@@ -140,19 +137,14 @@ fn render_ui(
         .unwrap();
 
     let buffered_terminal = terminal.backend_mut().buffered_terminal_mut();
-    processes.resize((
-        process_pane.area.width.into(),
-        process_pane.area.height.into(),
-    ));
 
-    render_process_pane(&screen_contents, &process_pane, buffered_terminal);
+    render_process_pane(&process_pane, buffered_terminal);
 }
 
 /// Render the chrome of the UI: that is, render everything except for the
 /// actual output of the process.
 fn render_chrome(
-    processes: &Processes,
-    screen_contents: &ScreenContents,
+    processes: &mut Processes,
     process_pane: &mut ProcessPane,
     frame: &mut Frame,
     process_list_state: &mut ListState,
@@ -170,7 +162,7 @@ fn render_chrome(
 
     render_status_bar(processes, layout[1], frame, theme);
 
-    render_process_pane_placeholder(screen_contents, process_pane, top_layout[1], frame);
+    render_process_pane_placeholder(processes, process_pane, top_layout[1], frame);
 }
 
 fn process_list_width(processes: &Processes, theme: MintakaTheme) -> usize {
@@ -294,19 +286,23 @@ fn render_status_bar(processes: &Processes, area: Rect, frame: &mut Frame, theme
 }
 
 fn render_process_pane_placeholder(
-    screen_contents: &ScreenContents,
+    processes: &mut Processes,
     process_pane: &mut ProcessPane,
     area: Rect,
     frame: &mut Frame,
 ) {
-    process_pane.skip = match screen_contents {
+    processes.resize((area.width.into(), area.height.into()));
+
+    let screen_contents = processes.screen_contents();
+
+    let skip = match screen_contents {
         ScreenContents::Error(_) => false,
         ScreenContents::Terminal { .. } => true,
     };
 
-    frame.render_widget(process_pane, area);
+    frame.render_widget(SetSkipWidget { skip }, area);
 
-    match screen_contents {
+    match &screen_contents {
         ScreenContents::Error(error) => {
             frame.render_widget(
                 Paragraph::new(error.to_owned()).wrap(Wrap { trim: false }),
@@ -317,17 +313,19 @@ fn render_process_pane_placeholder(
             // TODO: render directly?
         }
     }
+
+    process_pane.area = area;
+    process_pane.screen_contents = screen_contents;
 }
 
 fn render_process_pane<T: Terminal>(
-    screen_contents: &ScreenContents,
     process_pane: &ProcessPane,
     buffered_terminal: &mut BufferedTerminal<T>,
 ) {
     let ScreenContents::Terminal {
         lines,
         cursor_position,
-    } = screen_contents
+    } = &process_pane.screen_contents
     else {
         return;
     };
@@ -388,22 +386,27 @@ fn render_cursor<T: Terminal>(
 
 struct ProcessPane {
     area: Rect,
-    skip: bool,
+    screen_contents: ScreenContents,
 }
 
 impl ProcessPane {
     fn new() -> Self {
-        Self {
-            area: Rect::new(0, 0, 0, 0),
-            skip: false,
+        ProcessPane {
+            area: Rect::default(),
+            screen_contents: ScreenContents::Terminal {
+                lines: Vec::new(),
+                cursor_position: None,
+            },
         }
     }
 }
 
-impl Widget for &mut ProcessPane {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        self.area = area;
+struct SetSkipWidget {
+    skip: bool,
+}
 
+impl Widget for SetSkipWidget {
+    fn render(self, area: Rect, buf: &mut Buffer) {
         for position in area.positions() {
             buf.get_mut(position.x, position.y).set_skip(self.skip);
         }
