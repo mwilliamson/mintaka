@@ -220,19 +220,37 @@ impl Processes {
         &self.processes
     }
 
-    pub(crate) fn lines(&self) -> Vec<wezterm_term::Line> {
-        if let Some(snapshot) = &self.snapshot {
-            snapshot.lines()
-        } else {
-            self.processes[self.focused_process_index].lines()
-        }
-    }
-
-    pub(crate) fn cursor_position(&self) -> Option<CursorPosition> {
-        if matches!(self.mode, MintakaMode::ForwardInputToFocusedProcess) {
-            self.processes[self.focused_process_index].cursor_position()
-        } else {
-            None
+    pub(crate) fn screen_contents(&self) -> ScreenContents {
+        match self.mode {
+            MintakaMode::Main => {
+                let process = &self.processes[self.focused_process_index];
+                let lines = process.lines();
+                ScreenContents {
+                    lines,
+                    cursor_position: None,
+                }
+            }
+            MintakaMode::ForwardInputToFocusedProcess => {
+                let process = &self.processes[self.focused_process_index];
+                let lines = process.lines();
+                let cursor_position = process.cursor_position();
+                ScreenContents {
+                    lines,
+                    cursor_position,
+                }
+            }
+            MintakaMode::History => {
+                let lines = if let Some(snapshot) = &self.snapshot {
+                    snapshot.lines()
+                } else {
+                    // TODO: warning? Or make this state unrepresentable?
+                    Vec::new()
+                };
+                ScreenContents {
+                    lines,
+                    cursor_position: None,
+                }
+            }
         }
     }
 
@@ -542,4 +560,9 @@ impl Process {
             ProcessInstanceState::Running { instance, .. } => Some(instance),
         }
     }
+}
+
+pub(crate) struct ScreenContents {
+    pub(crate) lines: Vec<wezterm_term::Line>,
+    pub(crate) cursor_position: Option<CursorPosition>,
 }

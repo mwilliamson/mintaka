@@ -288,9 +288,7 @@ fn render_process_pane<T: Terminal>(
     process_pane: &ProcessPane,
     buffered_terminal: &mut BufferedTerminal<T>,
 ) {
-    // TODO: combine lines and cursor position into one call
-    let lines = processes.lines();
-    let cursor_position = processes.cursor_position();
+    let screen_contents = processes.screen_contents();
 
     let mut process_surface = Surface::new(
         process_pane.area.width.into(),
@@ -298,7 +296,7 @@ fn render_process_pane<T: Terminal>(
     );
     process_surface.add_change(Change::ClearScreen(Default::default()));
 
-    for (line_index, line) in lines.iter().enumerate() {
+    for (line_index, line) in screen_contents.lines.iter().enumerate() {
         if line_index != 0 {
             process_surface.add_change(termwiz::surface::Change::Text("\r\n".to_owned()));
         }
@@ -315,7 +313,8 @@ fn render_process_pane<T: Terminal>(
         process_pane.area.y.into(),
     );
 
-    if let Some((cursor_x, cursor_y)) = cursor_position
+    if let Some((cursor_x, cursor_y)) = screen_contents
+        .cursor_position
         .filter(|cursor_position| match cursor_position.visibility {
             CursorVisibility::Hidden => false,
             CursorVisibility::Visible => true,
