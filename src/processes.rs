@@ -179,24 +179,23 @@ impl Processes {
     }
 
     fn handle_status_updates(&mut self) {
-        let mut new_statuses = Vec::new();
+        let mut downstream_actions = Vec::new();
 
         for process in &mut self.processes {
-            let new_status = process.handle_status_updates();
-            if let Some(new_status) = new_status {
-                new_statuses.push((process.name().to_string(), new_status));
+            let downstream_action = process.handle_status_updates();
+            if let Some(downstream_action) = downstream_action {
+                downstream_actions.push((process.name().to_string(), downstream_action));
             }
         }
 
-        for (before_process_name, before_new_status) in new_statuses {
-            if let Some(after_process_indexes) = self.after.get_vec_mut(&before_process_name) {
-                if before_new_status.is_success() {
-                    for process_index in after_process_indexes {
-                        self.processes[*process_index].restart()
-                    }
-                } else {
-                    for process_index in after_process_indexes {
-                        self.processes[*process_index].mark_waiting_for_upstream()
+        for (upstream_process_name, downstream_action) in downstream_actions {
+            if let Some(downstream_process_indexes) = self.after.get_vec_mut(&upstream_process_name)
+            {
+                for process_index in downstream_process_indexes {
+                    let process = &mut self.processes[*process_index];
+                    match downstream_action {
+                        DownstreamAction::Restart => process.restart(),
+                        DownstreamAction::WaitForUpstream => process.mark_waiting_for_upstream(),
                     }
                 }
             }
@@ -455,7 +454,7 @@ impl Process {
         }
     }
 
-    fn handle_status_updates(&mut self) -> Option<ProcessStatus> {
+    fn handle_status_updates(&mut self) -> Option<DownstreamAction> {
         match &mut self.instance_state {
             ProcessInstanceState::NotStarted
             | ProcessInstanceState::Stopped
@@ -469,9 +468,14 @@ impl Process {
 
                 if let Some(new_status) = new_status {
                     *status = new_status;
+                    Some(if status.is_success() {
+                        DownstreamAction::Restart
+                    } else {
+                        DownstreamAction::WaitForUpstream
+                    })
+                } else {
+                    None
                 }
-
-                new_status
             }
         }
     }
@@ -814,4 +818,15 @@ impl ProcessSnapshot {
             }
         }
     }
+}
+
+/// The action to take on downstream processes following a change in an upstream
+/// process's status.
+enum DownstreamAction {
+    /// Restart all downstream processes.
+    Restart,
+
+    /// Stop all downstream processes, and wait for the upstream process to
+    /// succeed.
+    WaitForUpstream,
 }
