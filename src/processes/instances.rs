@@ -323,6 +323,12 @@ fn kill_sigterm(process_id: u32) {
 #[cfg(windows)]
 fn kill_sigkill(process_id: u32) {
     // TODO: handle errors
-    let handle = unsafe { winapi::um::processthreadsapi::OpenProcess(winapi::um::winnt::PROCESS_TERMINATE, 0, process_id) };
+    let handle = unsafe {
+        winapi::um::processthreadsapi::OpenProcess(
+            winapi::um::winnt::PROCESS_TERMINATE,
+            0,
+            process_id,
+        )
+    };
     unsafe { winapi::um::processthreadsapi::TerminateProcess(handle, 127) };
 }

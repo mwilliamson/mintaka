@@ -378,6 +378,19 @@ impl ProcessInstanceState {
         matches!(self, Self::Stopped)
     }
 
+    /// Whether or not the process is stopping.
+    fn is_stopping(&self) -> bool {
+        if let Self::Terminating {
+            state_on_termination,
+            ..
+        } = self
+        {
+            matches!(state_on_termination.as_ref(), Self::Stopped)
+        } else {
+            false
+        }
+    }
+
     /// Convert the process instance state to a process status.
     fn to_status(&self) -> ProcessStatus {
         match self {
@@ -477,6 +490,11 @@ impl Process {
         self.instance_state.is_stopped()
     }
 
+    /// Whether or not the process is stopping.
+    fn is_stopping(&self) -> bool {
+        self.instance_state.is_stopping()
+    }
+
     fn restart(&mut self) {
         self.kill(ProcessInstanceState::PendingRestart);
     }
@@ -486,7 +504,7 @@ impl Process {
     }
 
     fn kill(&mut self, state_on_termination: ProcessInstanceState) {
-        if self.is_stopped() {
+        if self.is_stopped() || self.is_stopping() {
             return;
         }
 
