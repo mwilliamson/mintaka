@@ -267,6 +267,33 @@ impl Processes {
     }
 }
 
+/// The ID of a success.
+#[derive(Clone, Copy)]
+pub(crate) struct SuccessId {
+    /// The ID of the process instance.
+    process_instance_id: ProcessInstanceId,
+
+    /// The index of the success within the process instance.
+    success_index: u32,
+}
+
+impl SuccessId {
+    /// Create a new success ID for a process instance.
+    fn new(process_instance_id: ProcessInstanceId) -> Self {
+        Self {
+            process_instance_id,
+            success_index: 0,
+        }
+    }
+
+    /// Increment the ID, returning the value before the increment.
+    fn increment(&mut self) -> Self {
+        let previous = *self;
+        self.success_index += 1;
+        previous
+    }
+}
+
 #[derive(Clone, Copy)]
 pub(crate) enum ProcessStatus {
     /// The process has not been started.
@@ -285,7 +312,7 @@ pub(crate) enum ProcessStatus {
     Running,
 
     /// The process is running and has reached a success state.
-    Success,
+    Success(SuccessId),
 
     /// The process is running and has reached an error state.
     Errors { error_count: Option<u64> },
@@ -302,7 +329,7 @@ impl ProcessStatus {
             ProcessStatus::WaitingForUpstream => false,
             ProcessStatus::FailedToStart => true,
             ProcessStatus::Running => false,
-            ProcessStatus::Success => false,
+            ProcessStatus::Success(_) => false,
             ProcessStatus::Errors { .. } => true,
             ProcessStatus::Exited { exit_code } => *exit_code != 0,
         }
@@ -315,7 +342,7 @@ impl ProcessStatus {
             ProcessStatus::WaitingForUpstream => false,
             ProcessStatus::FailedToStart => false,
             ProcessStatus::Running => false,
-            ProcessStatus::Success => true,
+            ProcessStatus::Success(_) => true,
             ProcessStatus::Errors { .. } => false,
             ProcessStatus::Exited { exit_code } => *exit_code == 0,
         }
@@ -328,7 +355,7 @@ impl ProcessStatus {
             ProcessStatus::WaitingForUpstream => false,
             ProcessStatus::FailedToStart => false,
             ProcessStatus::Running => true,
-            ProcessStatus::Success => true,
+            ProcessStatus::Success(_) => true,
             ProcessStatus::Errors { .. } => true,
             ProcessStatus::Exited { .. } => false,
         }
@@ -392,6 +419,7 @@ pub(crate) struct Process {
     pty_size: PtySize,
     instance_state: ProcessInstanceState,
     on_change: TerminalWaker,
+    next_process_instance_id: ProcessInstanceId,
 }
 
 impl Process {
@@ -419,6 +447,7 @@ impl Process {
             pty_size,
             instance_state,
             on_change,
+            next_process_instance_id: ProcessInstanceId::new(),
         }
     }
 
@@ -432,6 +461,7 @@ impl Process {
             pty_pair,
             self.on_change.clone(),
             status_tx,
+            self.next_process_instance_id.increment(),
         );
 
         self.instance_state = match start_result {
@@ -575,6 +605,25 @@ impl Process {
     }
 }
 
+/// The ID of the a process instance, unique within the context of a particular
+/// process.
+#[derive(Clone, Copy)]
+struct ProcessInstanceId(u32);
+
+impl ProcessInstanceId {
+    /// Create a new process instance ID for a process.
+    fn new() -> Self {
+        Self(0)
+    }
+
+    /// Increment the ID, returning the value before the increment.
+    fn increment(&mut self) -> Self {
+        let previous = *self;
+        self.0 += 1;
+        previous
+    }
+}
+
 pub(crate) struct ProcessInstance {
     terminal: Arc<Mutex<wezterm_term::Terminal>>,
     pty_master: Box<dyn portable_pty::MasterPty>,
@@ -587,6 +636,7 @@ impl ProcessInstance {
         pty_pair: PtyPair,
         on_change: TerminalWaker,
         status_tx: std::sync::mpsc::Sender<ProcessStatus>,
+        process_instance_id: ProcessInstanceId,
     ) -> Result<Self, ProcessError> {
         let pty_command = Self::process_config_to_pty_command(&process_config)?;
 
@@ -612,6 +662,7 @@ impl ProcessInstance {
             Arc::clone(&terminal),
             on_change,
             status_tx,
+            process_instance_id,
         );
 
         Ok(Self {
@@ -670,6 +721,7 @@ impl ProcessInstance {
         terminal: Arc<Mutex<wezterm_term::Terminal>>,
         on_change: TerminalWaker,
         status_tx: std::sync::mpsc::Sender<ProcessStatus>,
+        process_instance_id: ProcessInstanceId,
     ) {
         std::thread::spawn(move || {
             let mut bytes = vec![0; 256];
@@ -678,6 +730,7 @@ impl ProcessInstance {
             // whether the screen has been cleared and use stable lines in the
             // terminal screen?
             let mut last_line = String::new();
+            let mut next_success_id = SuccessId::new(process_instance_id);
 
             loop {
                 let bytes_read = reader.read(&mut bytes).unwrap();
@@ -717,7 +770,9 @@ impl ProcessInstance {
                             {
                                 let new_status = match line_analysis {
                                     LineAnalysis::Running => ProcessStatus::Running,
-                                    LineAnalysis::Success => ProcessStatus::Success,
+                                    LineAnalysis::Success => {
+                                        ProcessStatus::Success(next_success_id.increment())
+                                    }
                                     LineAnalysis::Errors { error_count } => {
                                         ProcessStatus::Errors { error_count }
                                     }

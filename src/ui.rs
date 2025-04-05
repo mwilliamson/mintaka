@@ -229,7 +229,7 @@ fn process_list_labels(
                 ProcessStatus::WaitingForUpstream => ("WAITING".to_owned(), STATUS_COLOR_OTHER),
                 ProcessStatus::FailedToStart => ("ERR".to_owned(), STATUS_COLOR_FAILED),
                 ProcessStatus::Running => ("RUNNING".to_owned(), STATUS_COLOR_OTHER),
-                ProcessStatus::Success => ("SUCCESS".to_owned(), STATUS_COLOR_SUCCESS),
+                ProcessStatus::Success(_) => ("SUCCESS".to_owned(), STATUS_COLOR_SUCCESS),
                 ProcessStatus::Errors { error_count } => {
                     let mut status_str = "ERR".to_owned();
 
