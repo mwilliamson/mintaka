@@ -51,8 +51,8 @@ command = ["not-a-real-command"]
 
 [[processes]]
 name = "Slow termination"
-command = ["bash", "-c", "handle_sigterm() {\necho SIGTERM\nsleep 1\nexit\n}\ntrap handle_sigterm TERM\nwhile true; do : ; done"]
+command = ["bash", "-c", "handle_sigterm() {\necho SIGTERM\nsleep 1\nexit\n}\ntrap handle_sigterm TERM\nwhile true; do sleep 1 ; done"]
 
 [[processes]]
 name = "Ignore termination"
-command = ["bash", "-c", "handle_sigterm() {\necho SIGTERM\n}\ntrap handle_sigterm TERM\nwhile true; do : ; done"]
+command = ["bash", "-c", "handle_sigterm() {\necho SIGTERM\n}\ntrap handle_sigterm TERM\nwhile true; do sleep 1 ; done"]
