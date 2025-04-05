@@ -362,6 +362,18 @@ impl ProcessInstanceState {
     fn is_stopped(&self) -> bool {
         matches!(self, Self::Stopped)
     }
+
+    /// Convert the process instance state to a process status.
+    fn to_status(&self) -> ProcessStatus {
+        match self {
+            ProcessInstanceState::NotStarted => ProcessStatus::NotStarted,
+            ProcessInstanceState::Stopped => ProcessStatus::Stopped,
+            ProcessInstanceState::WaitingForUpstream => ProcessStatus::WaitingForUpstream,
+            ProcessInstanceState::PendingRestart => ProcessStatus::Running,
+            ProcessInstanceState::FailedToStart(_) => ProcessStatus::FailedToStart,
+            ProcessInstanceState::Running { status, .. } => *status,
+        }
+    }
 }
 
 pub(crate) struct Process {
@@ -500,14 +512,7 @@ impl Process {
     }
 
     pub(crate) fn status(&self) -> ProcessStatus {
-        match &self.instance_state {
-            ProcessInstanceState::NotStarted => ProcessStatus::NotStarted,
-            ProcessInstanceState::Stopped => ProcessStatus::Stopped,
-            ProcessInstanceState::WaitingForUpstream => ProcessStatus::WaitingForUpstream,
-            ProcessInstanceState::PendingRestart => ProcessStatus::Running,
-            ProcessInstanceState::FailedToStart(_) => ProcessStatus::FailedToStart,
-            ProcessInstanceState::Running { status, .. } => *status,
-        }
+        self.instance_state.to_status()
     }
 
     fn lines(&self) -> Vec<wezterm_term::Line> {
