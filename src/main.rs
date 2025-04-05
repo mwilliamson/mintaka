@@ -23,6 +23,10 @@ fn main() {
         {
             let mut processes_locked = processes.lock().unwrap();
             processes_locked.do_work().unwrap();
+
+            if processes_locked.stopped() {
+                return;
+            }
         }
 
         ui.render(&processes);
@@ -36,7 +40,6 @@ fn main() {
             Some(MintakaInputEvent::Quit) => {
                 let mut processes = processes.lock().unwrap();
                 processes.stop_all();
-                return;
             }
             Some(MintakaInputEvent::FocusProcessUp) => {
                 let mut processes = processes.lock().unwrap();

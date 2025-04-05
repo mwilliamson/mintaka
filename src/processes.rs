@@ -171,6 +171,12 @@ impl Processes {
         }
     }
 
+    /// Whether or not all processes have stopped.
+    pub(crate) fn stopped(&self) -> bool {
+        self.processes.iter().all(|process| process.stopped())
+
+    }
+
     pub(crate) fn do_work(&mut self) -> Result<(), ProcessError> {
         self.handle_status_updates();
 
@@ -443,6 +449,11 @@ impl Process {
         self.kill(ProcessInstanceState::Stopped);
     }
 
+    /// Whether or not the process has stopped.
+    fn stopped(&self) -> bool {
+        matches!(self.instance_state, ProcessInstanceState::Stopped)
+    }
+
     fn restart(&mut self) {
         self.kill(ProcessInstanceState::PendingRestart);
     }
@@ -452,6 +463,10 @@ impl Process {
     }
 
     fn kill(&mut self, new_process_instance_state: ProcessInstanceState) {
+        if self.stopped() {
+            return;
+        }
+
         let previous_instance_state =
             std::mem::replace(&mut self.instance_state, new_process_instance_state);
         if let ProcessInstanceState::Running { mut instance, .. } = previous_instance_state {
