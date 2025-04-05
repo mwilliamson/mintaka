@@ -4,6 +4,9 @@
 
 * Handle error when process cannot be spawned rather than panicking.
 
+* When quitting, send SIGTERM, and SIGKILL if necessary, to all processes, and
+  wait for all processes to exit.
+
 # 0.4.0
 
 * Support sending input to process.
