@@ -275,6 +275,9 @@ pub(crate) enum ProcessStatus {
     /// The process will run once an upstream process reaches a success state.
     WaitingForUpstream,
 
+    /// Failed to start a process instance.
+    FailedToStart,
+
     /// The process is running and has not reached a success or error state.
     Running,
 
@@ -294,6 +297,7 @@ impl ProcessStatus {
             ProcessStatus::NotStarted => false,
             ProcessStatus::Stopped => false,
             ProcessStatus::WaitingForUpstream => false,
+            ProcessStatus::FailedToStart => true,
             ProcessStatus::Running => false,
             ProcessStatus::Success => false,
             ProcessStatus::Errors { .. } => true,
@@ -306,6 +310,7 @@ impl ProcessStatus {
             ProcessStatus::NotStarted => false,
             ProcessStatus::Stopped => false,
             ProcessStatus::WaitingForUpstream => false,
+            ProcessStatus::FailedToStart => false,
             ProcessStatus::Running => false,
             ProcessStatus::Success => true,
             ProcessStatus::Errors { .. } => false,
@@ -318,6 +323,7 @@ impl ProcessStatus {
             ProcessStatus::NotStarted => false,
             ProcessStatus::Stopped => false,
             ProcessStatus::WaitingForUpstream => false,
+            ProcessStatus::FailedToStart => false,
             ProcessStatus::Running => true,
             ProcessStatus::Success => true,
             ProcessStatus::Errors { .. } => true,
@@ -339,6 +345,9 @@ enum ProcessInstanceState {
 
     /// This process should be restarted.
     PendingRestart,
+
+    /// Failed to start a process instance.
+    FailedToStart(ProcessError),
 
     /// This process has a running instance.
     Running {
@@ -394,25 +403,26 @@ impl Process {
         }
     }
 
-    fn start(&mut self) -> Result<(), ProcessError> {
+    fn start(&mut self) {
         let pty_pair = self.pty_system.openpty(self.pty_size).unwrap();
 
         let (status_tx, status_rx) = std::sync::mpsc::channel();
 
-        let instance = ProcessInstance::start(
+        let start_result = ProcessInstance::start(
             &self.process_config,
             pty_pair,
             self.on_change.clone(),
             status_tx,
-        )?;
+        );
 
-        self.instance_state = ProcessInstanceState::Running {
-            instance,
-            status: ProcessStatus::Running,
-            status_rx,
+        self.instance_state = match start_result {
+            Ok(instance) => ProcessInstanceState::Running {
+                instance,
+                status: ProcessStatus::Running,
+                status_rx,
+            },
+            Err(error) => ProcessInstanceState::FailedToStart(error),
         };
-
-        Ok(())
     }
 
     pub(crate) fn name(&self) -> &str {
@@ -450,7 +460,8 @@ impl Process {
             ProcessInstanceState::NotStarted
             | ProcessInstanceState::Stopped
             | ProcessInstanceState::WaitingForUpstream
-            | ProcessInstanceState::PendingRestart => None,
+            | ProcessInstanceState::PendingRestart
+            | ProcessInstanceState::FailedToStart(_) => None,
             ProcessInstanceState::Running {
                 status, status_rx, ..
             } => {
@@ -467,7 +478,7 @@ impl Process {
 
     fn do_work(&mut self) -> Result<(), ProcessError> {
         if matches!(self.instance_state, ProcessInstanceState::PendingRestart) {
-            self.start()?;
+            self.start();
         }
 
         Ok(())
@@ -486,6 +497,7 @@ impl Process {
             ProcessInstanceState::Stopped => ProcessStatus::Stopped,
             ProcessInstanceState::WaitingForUpstream => ProcessStatus::WaitingForUpstream,
             ProcessInstanceState::PendingRestart => ProcessStatus::Running,
+            ProcessInstanceState::FailedToStart(_) => ProcessStatus::FailedToStart,
             ProcessInstanceState::Running { status, .. } => *status,
         }
     }
@@ -495,7 +507,8 @@ impl Process {
             ProcessInstanceState::NotStarted
             | ProcessInstanceState::Stopped
             | ProcessInstanceState::WaitingForUpstream
-            | ProcessInstanceState::PendingRestart => Vec::new(),
+            | ProcessInstanceState::PendingRestart
+            | ProcessInstanceState::FailedToStart(_) => Vec::new(),
             ProcessInstanceState::Running { instance, .. } => instance.lines(),
         }
     }
@@ -534,7 +547,8 @@ impl Process {
             ProcessInstanceState::NotStarted
             | ProcessInstanceState::Stopped
             | ProcessInstanceState::WaitingForUpstream
-            | ProcessInstanceState::PendingRestart => None,
+            | ProcessInstanceState::PendingRestart
+            | ProcessInstanceState::FailedToStart(_) => None,
             ProcessInstanceState::Running { instance, .. } => Some(instance),
         }
     }
@@ -555,7 +569,10 @@ impl ProcessInstance {
     ) -> Result<Self, ProcessError> {
         let pty_command = Self::process_config_to_pty_command(&process_config)?;
 
-        let child_process = pty_pair.slave.spawn_command(pty_command).unwrap();
+        let child_process = pty_pair
+            .slave
+            .spawn_command(pty_command)
+            .map_err(ProcessError::SpawnCommandFailed)?;
         let child_process_killer = child_process.clone_killer();
         std::mem::drop(pty_pair.slave);
 
@@ -750,6 +767,8 @@ impl ProcessInstance {
 #[allow(dead_code)]
 #[derive(Debug)]
 pub(crate) enum ProcessError {
+    SpawnCommandFailed(anyhow::Error),
+
     ProcessConfigMissingCommand,
 
     GetCurrentDirFailed(std::io::Error),

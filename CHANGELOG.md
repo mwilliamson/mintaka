@@ -1,5 +1,9 @@
 # Changelog
 
+# 0.5.0
+
+* Handle error when process cannot be spawned rather than panicking.
+
 # 0.4.0
 
 * Support sending input to process.

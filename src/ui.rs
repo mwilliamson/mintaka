@@ -227,6 +227,7 @@ fn process_list_labels(
                 ProcessStatus::NotStarted => ("INACTIVE".to_owned(), STATUS_COLOR_OTHER),
                 ProcessStatus::Stopped => ("STOPPED".to_owned(), STATUS_COLOR_OTHER),
                 ProcessStatus::WaitingForUpstream => ("WAITING".to_owned(), STATUS_COLOR_OTHER),
+                ProcessStatus::FailedToStart => ("ERR".to_owned(), STATUS_COLOR_FAILED),
                 ProcessStatus::Running => ("RUNNING".to_owned(), STATUS_COLOR_OTHER),
                 ProcessStatus::Success => ("SUCCESS".to_owned(), STATUS_COLOR_SUCCESS),
                 ProcessStatus::Errors { error_count } => {
