@@ -476,10 +476,7 @@ impl Process {
         pty_size: PtySize,
         on_change: TerminalWaker,
     ) -> Self {
-        let name = process_config
-            .name
-            .clone()
-            .unwrap_or_else(|| process_config.command.join(" "));
+        let name = process_config.name();
 
         let instance_state = if process_config.autostart() {
             ProcessInstanceState::PendingRestart

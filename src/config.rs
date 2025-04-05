@@ -21,7 +21,7 @@ pub(crate) struct ProcessConfig {
 
     pub(crate) working_directory: Option<PathBuf>,
 
-    pub(crate) name: Option<String>,
+    name: Option<String>,
 
     #[serde(rename = "type")]
     process_type: Option<ProcessTypeConfig>,
@@ -36,6 +36,10 @@ pub(crate) struct ProcessConfig {
 }
 
 impl ProcessConfig {
+    pub(crate) fn name(&self) -> String {
+        self.name.clone().unwrap_or_else(|| self.command.join(" "))
+    }
+
     pub(crate) fn process_status_analyzer(&self) -> ProcessStatusAnalyzer {
         match self.process_type.as_ref() {
             None => ProcessStatusAnalyzer {
