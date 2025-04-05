@@ -210,6 +210,9 @@ fn process_list_labels(
     let normal_style = theme.text_style();
     let focused_style = theme.highlight_style();
 
+    let max_process_number = processes.processes().len() + 1;
+    let process_number_width = format!("{max_process_number}").len();
+
     processes
         .processes()
         .into_iter()
@@ -223,7 +226,12 @@ fn process_list_labels(
             };
 
             text.push_line(Line::styled(
-                format!(" {}. {} ", process_index + 1, process.name()),
+                format!(
+                    " {:>2$}. {} ",
+                    process_index + 1,
+                    process.name(),
+                    process_number_width
+                ),
                 style,
             ));
 
