@@ -182,7 +182,7 @@ impl Processes {
         let mut downstream_actions = Vec::new();
 
         for process in &mut self.processes {
-            let downstream_action = process.handle_status_updates();
+            let downstream_action = process.synchronize_status();
             if let Some(downstream_action) = downstream_action {
                 downstream_actions.push((process.name().to_string(), downstream_action));
             }
@@ -454,7 +454,11 @@ impl Process {
         }
     }
 
-    fn handle_status_updates(&mut self) -> Option<DownstreamAction> {
+    /// Synchronize the status of [`Process`] with the actual process.
+    ///
+    /// Returns the action that any downstream processes should take in response
+    /// to the status change, if any.
+    fn synchronize_status(&mut self) -> Option<DownstreamAction> {
         match &mut self.instance_state {
             ProcessInstanceState::NotStarted
             | ProcessInstanceState::Stopped
