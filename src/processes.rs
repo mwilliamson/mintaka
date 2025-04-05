@@ -54,7 +54,7 @@ pub(crate) struct Processes {
 
     on_change: TerminalWaker,
 
-    after: MultiMap<String, usize>,
+    after: MultiMap<String, DownstreamProcess>,
 }
 
 impl Processes {
@@ -134,7 +134,9 @@ impl Processes {
         process_config: ProcessConfig,
     ) -> Result<(), ProcessError> {
         if let Some(after) = &process_config.after {
-            self.after.insert(after.to_owned(), self.processes.len());
+            let process_index = self.processes.len();
+            self.after
+                .insert(after.to_owned(), DownstreamProcess { process_index });
         }
 
         let mut process = Process::new(
@@ -189,10 +191,9 @@ impl Processes {
         }
 
         for (upstream_process_name, downstream_action) in downstream_actions {
-            if let Some(downstream_process_indexes) = self.after.get_vec_mut(&upstream_process_name)
-            {
-                for process_index in downstream_process_indexes {
-                    let process = &mut self.processes[*process_index];
+            if let Some(downstream_processes) = self.after.get_vec_mut(&upstream_process_name) {
+                for downstream_process in downstream_processes {
+                    let process = &mut self.processes[downstream_process.process_index];
                     match downstream_action {
                         DownstreamAction::Restart => process.restart(),
                         DownstreamAction::WaitForUpstream => process.mark_waiting_for_upstream(),
@@ -329,6 +330,10 @@ impl ProcessStatus {
             ProcessStatus::Exited { .. } => false,
         }
     }
+}
+
+struct DownstreamProcess {
+    process_index: usize,
 }
 
 enum ProcessInstanceState {
