@@ -16,10 +16,7 @@ fn main() {
 
     let mut ui = MintakaUi::new();
 
-    let mut processes = Processes::new(ui.waker());
-    for process_config in config.processes {
-        processes.start_process(process_config).unwrap();
-    }
+    let processes = Processes::new(ui.waker(), config.processes);
     let processes = Arc::new(Mutex::new(processes));
 
     loop {

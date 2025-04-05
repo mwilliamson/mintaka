@@ -1,6 +1,5 @@
-use std::sync::{Arc, Mutex};
+use std::{collections::HashMap, sync::{Arc, Mutex}};
 
-use multimap::MultiMap;
 use portable_pty::{ChildKiller, ExitStatus, PtyPair, PtySize, PtySystem};
 use termwiz::{
     escape::{Esc, EscCode, parser::Parser},
@@ -47,21 +46,17 @@ pub(crate) struct Processes {
 
     snapshot: Option<ProcessSnapshot>,
 
-    pty_system: SharedPtySystem,
-
     pty_size: portable_pty::PtySize,
 
     processes: Vec<Process>,
 
     pub(crate) focused_process_index: usize,
 
-    on_change: TerminalWaker,
-
-    after: MultiMap<String, DownstreamProcess>,
+    after: Vec<DownstreamProcesses>,
 }
 
 impl Processes {
-    pub(crate) fn new(on_change: TerminalWaker) -> Self {
+    pub(crate) fn new(on_change: TerminalWaker, process_configs: Vec<ProcessConfig>) -> Self {
         let pty_system = Arc::new(portable_pty::native_pty_system());
         let pty_size = portable_pty::PtySize {
             rows: 24,
@@ -70,16 +65,45 @@ impl Processes {
             pixel_height: 0,
         };
 
+        let mut processes = Vec::new();
+        let mut after: HashMap<_, _> = process_configs.iter().enumerate().map(|(process_index, process_config)|
+            (process_config.name(), DownstreamProcesses {
+                upstream_process_index: process_index,
+                last_upstream_status: ProcessStatus::NotStarted,
+                downstream_process_indexes: Vec::new(),
+            })
+        ).collect();
+
+        for process_config in process_configs {
+            if let Some(upstream_process_name) = &process_config.after {
+                // TODO: handle incorrect upstream process name.
+                if let Some(downstream_processes) = after.get_mut(upstream_process_name) {
+                    let process_index = processes.len();
+                    downstream_processes.downstream_process_indexes.push(process_index);
+                }
+            }
+
+            let process = Process::new(
+                process_config,
+                Arc::clone(&pty_system),
+                pty_size,
+                on_change.clone(),
+            );
+
+            processes.push(process);
+        }
+
+        let mut after: Vec<_> = after.into_values().collect();
+        after.sort_by_key(|downstream_processes| downstream_processes.upstream_process_index);
+
         Self {
             autofocus_enabled: true,
             mode: MintakaMode::Main,
             snapshot: None,
-            pty_system,
             pty_size,
-            processes: Vec::new(),
+            processes,
             focused_process_index: 0,
-            on_change,
-            after: MultiMap::new(),
+            after,
         }
     }
 
@@ -132,35 +156,6 @@ impl Processes {
         }
     }
 
-    pub(crate) fn start_process(
-        &mut self,
-        process_config: ProcessConfig,
-    ) -> Result<(), ProcessError> {
-        if let Some(after) = &process_config.after {
-            let process_index = self.processes.len();
-            self.after.insert(
-                after.to_owned(),
-                DownstreamProcess {
-                    process_index,
-                    last_upstream_status: ProcessStatus::NotStarted,
-                },
-            );
-        }
-
-        let mut process = Process::new(
-            process_config,
-            Arc::clone(&self.pty_system),
-            self.pty_size,
-            self.on_change.clone(),
-        );
-
-        process.do_work()?;
-
-        self.processes.push(process);
-
-        Ok(())
-    }
-
     pub(crate) fn stop_all(&mut self) {
         // TODO: prevent processes from automatically restarting after stopping.
         for process in &mut self.processes {
@@ -193,23 +188,18 @@ impl Processes {
             process.synchronize_status();
         }
 
-        for (upstream_process_name, downstream_processes) in &mut self.after {
-            for downstream_process in downstream_processes {
-                // TODO: struct self.after more sensibly to avoid the scan.
-                let upstream_process = self
-                    .processes
-                    .iter()
-                    .find(|process| &process.name == upstream_process_name)
-                    .unwrap();
-                let downstream_action =
-                    downstream_process.update_upstream_status(upstream_process.status());
+        for downstream_processes in &mut self.after {
+            let upstream_process = &self.processes[downstream_processes.upstream_process_index];
+            let downstream_action =
+                downstream_processes.update_upstream_status(upstream_process.status());
 
-                if let Some(downstream_action) = downstream_action {
-                    let process = &mut self.processes[downstream_process.process_index];
+            if let Some(downstream_action) = downstream_action {
+                for downstream_process_index in &downstream_processes.downstream_process_indexes {
+                    let downstream_process = &mut self.processes[*downstream_process_index];
 
                     match downstream_action {
-                        DownstreamAction::Restart => process.restart(),
-                        DownstreamAction::WaitForUpstream => process.mark_waiting_for_upstream(),
+                        DownstreamAction::Restart => downstream_process.restart(),
+                        DownstreamAction::WaitForUpstream => downstream_process.mark_waiting_for_upstream(),
                     }
                 }
             }
@@ -372,18 +362,21 @@ impl ProcessStatus {
     }
 }
 
-/// Track a downstream process.
-struct DownstreamProcess {
-    /// The index of the process in [`Processes::processes`].
-    process_index: usize,
+/// Track a set of downstream processes.
+struct DownstreamProcesses {
+    /// The index of the upstream process in [`Processes::processes`].
+    upstream_process_index: usize,
+
+    /// The index of the downstream processes in [`Processes::processes`].
+    downstream_process_indexes: Vec<usize>,
 
     /// The last upstream status that was acted upon.
     last_upstream_status: ProcessStatus,
 }
 
-impl DownstreamProcess {
+impl DownstreamProcesses {
     /// Update the status of the upstream process, returning the action that
-    /// should be taken on the downstream process, if any.
+    /// should be taken on the downstream processes, if any.
     fn update_upstream_status(
         &mut self,
         upstream_status: ProcessStatus,

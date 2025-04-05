@@ -12,7 +12,6 @@ strip = true
 [dependencies]
 anyhow = "1.0.97"
 clap = { version = "4.5.4", features = ["derive"] }
-multimap = "0.10.0"
 portable-pty = { git = "https://github.com/wez/wezterm.git", rev = "8fa4ba9ace4e3e9bb17246e6dcfe1ec175ff49aa" }
 ratatui = { version = "0.26.2", default-features = false, features = ["termwiz"] }
 regex = "1.10.4"
