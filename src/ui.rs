@@ -299,15 +299,15 @@ fn render_process_pane_placeholder(
     area: Rect,
     frame: &mut Frame,
 ) {
+    process_pane.skip = match screen_contents {
+        ScreenContents::Error(_) => false,
+        ScreenContents::Terminal { .. } => true,
+    };
+
     frame.render_widget(process_pane, area);
 
     match screen_contents {
         ScreenContents::Error(error) => {
-            // Since we're rendering terminal output outside of ratatui, we need
-            // to clear the area before rendering.
-            frame.render_widget(Block::new().bg(Color::Red), area);
-            frame.render_widget(Block::new().bg(Color::Reset), area);
-
             frame.render_widget(
                 Paragraph::new(error.to_owned()).wrap(Wrap { trim: false }),
                 area,
@@ -388,18 +388,24 @@ fn render_cursor<T: Terminal>(
 
 struct ProcessPane {
     area: Rect,
+    skip: bool,
 }
 
 impl ProcessPane {
     fn new() -> Self {
         Self {
             area: Rect::new(0, 0, 0, 0),
+            skip: false,
         }
     }
 }
 
 impl Widget for &mut ProcessPane {
-    fn render(self, area: Rect, _buf: &mut Buffer) {
+    fn render(self, area: Rect, buf: &mut Buffer) {
         self.area = area;
+
+        for position in area.positions() {
+            buf.get_mut(position.x, position.y).set_skip(self.skip);
+        }
     }
 }

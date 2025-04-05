@@ -403,13 +403,11 @@ impl ProcessInstanceState {
             ProcessInstanceState::Terminating {
                 state_on_termination,
                 ..
-            } => {
-                match state_on_termination.as_ref() {
-                    ProcessInstanceState::PendingRestart => ProcessStatus::Restarting,
-                    ProcessInstanceState::Stopped => ProcessStatus::Stopping,
-                    _ => ProcessStatus::Terminating,
-                }
-            }
+            } => match state_on_termination.as_ref() {
+                ProcessInstanceState::PendingRestart => ProcessStatus::Restarting,
+                ProcessInstanceState::Stopped => ProcessStatus::Stopping,
+                _ => ProcessStatus::Terminating,
+            },
         }
     }
 }
