@@ -404,13 +404,10 @@ impl ProcessInstanceState {
                 state_on_termination,
                 ..
             } => {
-                if matches!(
-                    state_on_termination.as_ref(),
-                    ProcessInstanceState::PendingRestart
-                ) {
-                    ProcessStatus::Restarting
-                } else {
-                    ProcessStatus::Stopping
+                match state_on_termination.as_ref() {
+                    ProcessInstanceState::PendingRestart => ProcessStatus::Restarting,
+                    ProcessInstanceState::Stopped => ProcessStatus::Stopping,
+                    _ => ProcessStatus::Terminating,
                 }
             }
         }

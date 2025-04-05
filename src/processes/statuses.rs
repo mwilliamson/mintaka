@@ -29,6 +29,9 @@ pub(crate) enum ProcessStatus {
     /// The process is being restarted.
     Restarting,
 
+    /// The process is being terminated.
+    Terminating,
+
     /// The process is being stopped.
     Stopping,
 }
@@ -72,6 +75,7 @@ impl ProcessStatus {
             ProcessStatus::Errors { .. } => true,
             ProcessStatus::Exited { exit_code } => *exit_code != 0,
             ProcessStatus::Restarting => false,
+            ProcessStatus::Terminating => false,
             ProcessStatus::Stopping => false,
         }
     }
@@ -87,6 +91,7 @@ impl ProcessStatus {
             ProcessStatus::Errors { .. } => false,
             ProcessStatus::Exited { exit_code } => *exit_code == 0,
             ProcessStatus::Restarting => false,
+            ProcessStatus::Terminating => false,
             ProcessStatus::Stopping => false,
         }
     }
@@ -102,6 +107,7 @@ impl ProcessStatus {
             ProcessStatus::Errors { .. } => true,
             ProcessStatus::Exited { .. } => false,
             ProcessStatus::Restarting => true,
+            ProcessStatus::Terminating => true,
             ProcessStatus::Stopping => true,
         }
     }
