@@ -138,8 +138,13 @@ impl Processes {
     ) -> Result<(), ProcessError> {
         if let Some(after) = &process_config.after {
             let process_index = self.processes.len();
-            self.after
-                .insert(after.to_owned(), DownstreamProcess { process_index });
+            self.after.insert(
+                after.to_owned(),
+                DownstreamProcess {
+                    process_index,
+                    last_upstream_status: ProcessStatus::NotStarted,
+                },
+            );
         }
 
         let mut process = Process::new(
@@ -184,19 +189,24 @@ impl Processes {
     }
 
     fn handle_status_updates(&mut self) {
-        let mut downstream_actions = Vec::new();
-
         for process in &mut self.processes {
-            let downstream_action = process.synchronize_status();
-            if let Some(downstream_action) = downstream_action {
-                downstream_actions.push((process.name().to_string(), downstream_action));
-            }
+            process.synchronize_status();
         }
 
-        for (upstream_process_name, downstream_action) in downstream_actions {
-            if let Some(downstream_processes) = self.after.get_vec_mut(&upstream_process_name) {
-                for downstream_process in downstream_processes {
+        for (upstream_process_name, downstream_processes) in &mut self.after {
+            for downstream_process in downstream_processes {
+                // TODO: struct self.after more sensibly to avoid the scan.
+                let upstream_process = self
+                    .processes
+                    .iter()
+                    .find(|process| &process.name == upstream_process_name)
+                    .unwrap();
+                let downstream_action =
+                    downstream_process.update_upstream_status(upstream_process.status());
+
+                if let Some(downstream_action) = downstream_action {
                     let process = &mut self.processes[downstream_process.process_index];
+
                     match downstream_action {
                         DownstreamAction::Restart => process.restart(),
                         DownstreamAction::WaitForUpstream => process.mark_waiting_for_upstream(),
@@ -268,7 +278,7 @@ impl Processes {
 }
 
 /// The ID of a success.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub(crate) struct SuccessId {
     /// The ID of the process instance.
     process_instance_id: ProcessInstanceId,
@@ -294,7 +304,7 @@ impl SuccessId {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub(crate) enum ProcessStatus {
     /// The process has not been started.
     NotStarted,
@@ -362,8 +372,45 @@ impl ProcessStatus {
     }
 }
 
+/// Track a downstream process.
 struct DownstreamProcess {
+    /// The index of the process in [`Processes::processes`].
     process_index: usize,
+
+    /// The last upstream status that was acted upon.
+    last_upstream_status: ProcessStatus,
+}
+
+impl DownstreamProcess {
+    /// Update the status of the upstream process, returning the action that
+    /// should be taken on the downstream process, if any.
+    fn update_upstream_status(
+        &mut self,
+        upstream_status: ProcessStatus,
+    ) -> Option<DownstreamAction> {
+        let downstream_action = if self.last_upstream_status == upstream_status {
+            None
+        } else if upstream_status.is_success() {
+            Some(DownstreamAction::Restart)
+        } else {
+            Some(DownstreamAction::WaitForUpstream)
+        };
+
+        self.last_upstream_status = upstream_status;
+
+        downstream_action
+    }
+}
+
+/// The action to take on downstream processes following a change in an upstream
+/// process's status.
+enum DownstreamAction {
+    /// Restart all downstream processes.
+    Restart,
+
+    /// Stop all downstream processes, and wait for the upstream process to
+    /// succeed.
+    WaitForUpstream,
 }
 
 enum ProcessInstanceState {
@@ -505,16 +552,13 @@ impl Process {
     }
 
     /// Synchronize the status of [`Process`] with the actual process.
-    ///
-    /// Returns the action that any downstream processes should take in response
-    /// to the status change, if any.
-    fn synchronize_status(&mut self) -> Option<DownstreamAction> {
+    fn synchronize_status(&mut self) {
         match &mut self.instance_state {
             ProcessInstanceState::NotStarted
             | ProcessInstanceState::Stopped
             | ProcessInstanceState::WaitingForUpstream
             | ProcessInstanceState::PendingRestart
-            | ProcessInstanceState::FailedToStart(_) => None,
+            | ProcessInstanceState::FailedToStart(_) => {}
             ProcessInstanceState::Running {
                 status, status_rx, ..
             } => {
@@ -522,13 +566,6 @@ impl Process {
 
                 if let Some(new_status) = new_status {
                     *status = new_status;
-                    Some(if status.is_success() {
-                        DownstreamAction::Restart
-                    } else {
-                        DownstreamAction::WaitForUpstream
-                    })
-                } else {
-                    None
                 }
             }
         }
@@ -607,7 +644,7 @@ impl Process {
 
 /// The ID of the a process instance, unique within the context of a particular
 /// process.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 struct ProcessInstanceId(u32);
 
 impl ProcessInstanceId {
@@ -897,15 +934,4 @@ impl ProcessSnapshot {
             }
         }
     }
-}
-
-/// The action to take on downstream processes following a change in an upstream
-/// process's status.
-enum DownstreamAction {
-    /// Restart all downstream processes.
-    Restart,
-
-    /// Stop all downstream processes, and wait for the upstream process to
-    /// succeed.
-    WaitForUpstream,
 }
