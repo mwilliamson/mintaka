@@ -19,6 +19,10 @@ fn main() {
     let processes = Processes::new(ui.waker(), config.processes);
     let processes = Arc::new(Mutex::new(processes));
 
+    // Render once before processes are spawned to get the initial area
+    // available for output.
+    ui.render(&processes);
+
     loop {
         {
             let mut processes_locked = processes.lock().unwrap();
