@@ -11,6 +11,7 @@ pub(crate) enum MintakaInputEvent {
     ScrollPageDown,
     ScrollLineUp,
     ScrollLineDown,
+    EnterHistory,
     LeaveHistory,
     RestartProcess,
     EnterProcess,
@@ -32,8 +33,8 @@ pub(super) fn describe(processes: &Processes) -> Vec<(&str, &str)> {
             vec![
                 (" a", autofocus_str),
                 ("↑↓", "Focus process"),
-                ("PgUp", "Page up"),
                 (" r", "Restart process"),
+                (" h", "Enter history"),
                 ("^e", "Enter process"),
                 ("^c", "Quit"),
             ]
@@ -71,6 +72,11 @@ pub(super) fn read_key_event(key_event: KeyEvent, mode: MintakaMode) -> Option<M
                 key: KeyCode::DownArrow,
                 modifiers: KeyModifiers::NONE,
             } => Some(MintakaInputEvent::FocusProcessDown),
+
+            KeyEvent {
+                key: KeyCode::Char('h'),
+                modifiers: KeyModifiers::NONE,
+            } => Some(MintakaInputEvent::EnterHistory),
 
             KeyEvent {
                 key: KeyCode::PageUp,

@@ -136,14 +136,18 @@ impl Processes {
     }
 
     pub(crate) fn scroll(&mut self, direction: ScrollDirection) {
+        self.enter_history();
+
+        if let Some(snapshot) = &mut self.snapshot {
+            snapshot.scroll(direction);
+        }
+    }
+
+    pub(crate) fn enter_history(&mut self) {
         self.mode = MintakaMode::History;
 
         if self.snapshot.is_none() {
             self.snapshot = Some(self.processes[self.focused_process_index].snapshot());
-        }
-
-        if let Some(snapshot) = &mut self.snapshot {
-            snapshot.scroll(direction);
         }
     }
 

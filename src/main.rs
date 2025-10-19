@@ -91,6 +91,10 @@ fn main() {
                 let mut processes = processes.lock().unwrap();
                 processes.send_input(key_event);
             }
+            Some(MintakaInputEvent::EnterHistory) => {
+                let mut processes = processes.lock().unwrap();
+                processes.enter_history();
+            }
             Some(MintakaInputEvent::LeaveHistory) => {
                 let mut processes = processes.lock().unwrap();
                 processes.leave_history();

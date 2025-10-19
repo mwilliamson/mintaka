@@ -126,6 +126,7 @@ For the purposes of starting other processes, the successful statuses are
 * Use the up and down arrow keys to focus on the previous and next process
   respectively.
 * Press `r` to restart the focused process.
+* Press `h` to enter the history for a process.
 * Press `Ctrl+e` to enter a process. While a process is entered, any input will
   be sent to that process. Press `Ctrl+e` again to leave the process.
 * Press `Ctrl+c` to quit.
