@@ -55,13 +55,21 @@ fn main() {
                 processes.disable_autofocus();
                 processes.move_focus_down();
             }
-            Some(MintakaInputEvent::ScrollUp) => {
+            Some(MintakaInputEvent::ScrollPageUp) => {
                 let mut processes = processes.lock().unwrap();
-                processes.scroll(ScrollDirection::Up);
+                processes.scroll(ScrollDirection::PageUp);
             }
-            Some(MintakaInputEvent::ScrollDown) => {
+            Some(MintakaInputEvent::ScrollPageDown) => {
                 let mut processes = processes.lock().unwrap();
-                processes.scroll(ScrollDirection::Down);
+                processes.scroll(ScrollDirection::PageDown);
+            }
+            Some(MintakaInputEvent::ScrollLineUp) => {
+                let mut processes = processes.lock().unwrap();
+                processes.scroll(ScrollDirection::LineUp);
+            }
+            Some(MintakaInputEvent::ScrollLineDown) => {
+                let mut processes = processes.lock().unwrap();
+                processes.scroll(ScrollDirection::LineDown);
             }
             Some(MintakaInputEvent::ToggleAutofocus) => {
                 let mut processes = processes.lock().unwrap();

@@ -7,8 +7,10 @@ pub(crate) enum MintakaInputEvent {
     ToggleAutofocus,
     FocusProcessUp,
     FocusProcessDown,
-    ScrollUp,
-    ScrollDown,
+    ScrollPageUp,
+    ScrollPageDown,
+    ScrollLineUp,
+    ScrollLineDown,
     LeaveHistory,
     RestartProcess,
     EnterProcess,
@@ -30,7 +32,7 @@ pub(super) fn describe(processes: &Processes) -> Vec<(&str, &str)> {
             vec![
                 (" a", autofocus_str),
                 ("↑↓", "Focus process"),
-                ("PgUp", "Scroll up"),
+                ("PgUp", "Page up"),
                 (" r", "Restart process"),
                 ("^e", "Enter process"),
                 ("^c", "Quit"),
@@ -44,8 +46,9 @@ pub(super) fn describe(processes: &Processes) -> Vec<(&str, &str)> {
         crate::processes::MintakaMode::History => {
             vec![
                 (" q", "Leave history"),
-                ("PgUp", "Scroll up"),
-                ("PgDn", "Scroll down"),
+                ("PgUp", "Page up"),
+                ("PgDn", "Page down"),
+                ("↑↓", "Line up/down"),
             ]
         }
     }
@@ -72,7 +75,7 @@ pub(super) fn read_key_event(key_event: KeyEvent, mode: MintakaMode) -> Option<M
             KeyEvent {
                 key: KeyCode::PageUp,
                 modifiers: KeyModifiers::NONE,
-            } => Some(MintakaInputEvent::ScrollUp),
+            } => Some(MintakaInputEvent::ScrollPageUp),
 
             KeyEvent {
                 key: KeyCode::Char('r'),
@@ -110,12 +113,22 @@ pub(super) fn read_key_event(key_event: KeyEvent, mode: MintakaMode) -> Option<M
             KeyEvent {
                 key: KeyCode::PageUp,
                 modifiers: KeyModifiers::NONE,
-            } => Some(MintakaInputEvent::ScrollUp),
+            } => Some(MintakaInputEvent::ScrollPageUp),
 
             KeyEvent {
                 key: KeyCode::PageDown,
                 modifiers: KeyModifiers::NONE,
-            } => Some(MintakaInputEvent::ScrollDown),
+            } => Some(MintakaInputEvent::ScrollPageDown),
+
+            KeyEvent {
+                key: KeyCode::UpArrow,
+                modifiers: KeyModifiers::NONE,
+            } => Some(MintakaInputEvent::ScrollLineUp),
+
+            KeyEvent {
+                key: KeyCode::DownArrow,
+                modifiers: KeyModifiers::NONE,
+            } => Some(MintakaInputEvent::ScrollLineDown),
 
             _ => None,
         },

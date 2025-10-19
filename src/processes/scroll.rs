@@ -1,4 +1,6 @@
 pub(crate) enum ScrollDirection {
-    Up,
-    Down,
+    PageUp,
+    PageDown,
+    LineUp,
+    LineDown,
 }
