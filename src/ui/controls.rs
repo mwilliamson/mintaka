@@ -43,7 +43,7 @@ pub(super) fn describe(processes: &Processes) -> Vec<(&str, &str)> {
 
         crate::processes::MintakaMode::History => {
             vec![
-                ("^e", "Leave history"),
+                (" q", "Leave history"),
                 ("PgUp", "Scroll up"),
                 ("PgDn", "Scroll down"),
             ]
@@ -103,8 +103,8 @@ pub(super) fn read_key_event(key_event: KeyEvent, mode: MintakaMode) -> Option<M
 
         MintakaMode::History => match key_event {
             KeyEvent {
-                key: KeyCode::Char('e'),
-                modifiers: KeyModifiers::CTRL,
+                key: KeyCode::Char('q'),
+                modifiers: KeyModifiers::NONE,
             } => Some(MintakaInputEvent::LeaveHistory),
 
             KeyEvent {
